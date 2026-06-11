@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 健身教练</title>
+<script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.7/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080a12;--bg2:#0c0f1a;--surface:rgba(255,255,255,.06);--surface-hover:rgba(255,255,255,.1);
+  --card:rgba(255,255,255,.07);--card-hover:rgba(255,255,255,.11);--border:rgba(255,255,255,.1);
+  --border-light:rgba(255,255,255,.15);--accent:#0066ff;--accent2:#00d4ff;--accent3:#00ff88;
+  --purple:#7c3aed;--text:#f0f4f8;--text2:#b0b8c8;--text3:#8890a0;--danger:#ff4757;--success:#00ff88;
+  --radius:12px;--radius-lg:20px;--select-bg:#1a1e30;
+  --font:'PingFang SC','Microsoft YaHei','Noto Sans SC','SF Pro Text',-apple-system,sans-serif;
+  --shadow:0 8px 32px rgba(0,0,0,.4);--shadow-sm:0 2px 8px rgba(0,0,0,.25);
+}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  height:100vh;overflow:hidden;line-height:1.6;
+  background-image:radial-gradient(ellipse at 20% 0%,rgba(0,102,255,.06) 0%,transparent 60%),
+    radial-gradient(ellipse at 80% 100%,rgba(0,212,255,.04) 0%,transparent 50%),
+    radial-gradient(ellipse at 50% 50%,rgba(124,58,237,.03) 0%,transparent 40%);
+}
+.layout{display:flex;height:100vh}
+
+/* sidebar */
+.sidebar{
+  width:68px;background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;align-items:center;padding:20px 0;flex-shrink:0;z-index:20;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+}
+.sidebar .logo{
+  width:36px;height:36px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:28px;
+  color:#000;font-weight:800;box-shadow:0 0 20px rgba(0,102,255,.3);
+}
+.nav-group{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1}
+.nav-item{
+  width:44px;height:44px;border-radius:var(--radius);display:flex;align-items:center;
+  justify-content:center;font-size:18px;cursor:pointer;transition:all .25s ease;color:var(--text3);position:relative;
+}
+.nav-item:hover{background:var(--surface-hover);color:var(--text2)}
+.nav-item.active{
+  background:linear-gradient(135deg,rgba(0,102,255,.15),rgba(0,212,255,.1));
+  color:var(--accent2);box-shadow:inset 0 0 0 1px rgba(0,212,255,.15);
+}
+.nav-item.active::before{
+  content:'';position:absolute;left:-1px;top:50%;transform:translateY(-50%);
+  width:2.5px;height:18px;border-radius:0 2px 2px 0;
+  background:linear-gradient(180deg,var(--accent),var(--accent2));box-shadow:0 0 6px rgba(0,212,255,.4);
+}
+.nav-tooltip{
+  position:fixed;left:-999px;top:-999px;background:#1a1d2e;color:var(--text);
+  padding:6px 12px;border-radius:8px;font-size:12px;font-weight:500;white-space:nowrap;
+  pointer-events:none;opacity:0;transition:opacity .12s;border:1px solid var(--border);
+  box-shadow:var(--shadow-sm);z-index:999;
+}
+.nav-item-wrap{position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer}
+.nav-item-wrap:hover .nav-tooltip{opacity:1}
+.sidebar .spacer{flex:1}
+.sidebar .logout-btn{color:var(--text3);font-size:16px;cursor:pointer;padding:10px;transition:all .2s;opacity:.4}
+.sidebar .logout-btn:hover{opacity:1;color:var(--danger)}
+
+/* top */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.topbar{
+  height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;flex-shrink:0;
+  border-bottom:1px solid var(--border);background:rgba(8,10,18,.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
+.topbar h2{font-size:14px;font-weight:600;letter-spacing:.3px;display:flex;align-items:center;gap:8px}
+.topbar h2 span{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.topbar .user-info{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px}
+.topbar .user-info .dot{width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;box-shadow:0 0 8px rgba(0,255,136,.3)}
+.main-body{flex:1;display:flex;min-height:0;overflow:hidden}
+
+/* panels */
+.panel{display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden}
+.panel.active{display:flex}
+
+/* history panel */
+.history-panel{
+  width:0;overflow:hidden;background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0;transition:width .25s ease;min-height:0;
+}
+.history-panel.open{width:260px}
+.history-header{
+  display:flex;align-items:center;justify-content:space-between;padding:14px 16px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.history-title{font-size:13px;font-weight:600;color:var(--text)}
+.history-close{color:var(--text3);cursor:pointer;font-size:14px;padding:4px;border-radius:6px}
+.history-close:hover{color:var(--text);background:var(--surface)}
+.history-list{flex:1;overflow-y:auto;padding:8px}
+.history-list::-webkit-scrollbar{width:3px}
+.history-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.history-item{
+  padding:10px 12px;border-radius:8px;cursor:pointer;transition:all .15s;
+  font-size:12px;color:var(--text2);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.history-item:hover{background:var(--surface);color:var(--text)}
+.history-item.active{background:rgba(0,102,255,.12);color:var(--accent2)}
+.history-item .date{font-size:10px;color:var(--text3);margin-top:2px}
+.history-loading,.history-empty{padding:24px;text-align:center;color:var(--text3);font-size:12px}
+.history-new{
+  padding:12px 16px;border-top:1px solid var(--border);cursor:pointer;
+  font-size:13px;color:var(--text2);text-align:center;transition:all .15s;flex-shrink:0;
+}
+.history-new:hover{background:var(--surface);color:var(--accent2)}
+
+/* chat */
+.messages{flex:1;overflow-y:auto;padding:20px 28px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.messages::-webkit-scrollbar{width:4px}
+.messages::-webkit-scrollbar-track{background:transparent}
+.messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.msg{max-width:76%;padding:14px 18px;border-radius:16px;font-size:14px;line-height:1.7;word-wrap:break-word;white-space:pre-wrap;animation:fadeUp .35s ease-out}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{align-self:flex-end;background:linear-gradient(135deg,#0052cc,#0066ff);color:#fff;border-bottom-right-radius:4px;box-shadow:0 4px 20px rgba(0,102,255,.2)}
+.ai-row{display:flex;align-items:flex-end;gap:12px;align-self:flex-start;max-width:88%;animation:fadeUp .35s}
+.ai-avatar{width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,rgba(0,102,255,.2),rgba(0,212,255,.1));border:1.5px solid rgba(0,212,255,.2);padding:4px}
+.ai-avatar svg{width:100%;height:100%;display:block}
+.msg.ai{background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--border);border-bottom-left-radius:4px;box-shadow:var(--shadow-sm)}
+.msg.ai h3,.msg.ai h2{font-size:14px;font-weight:700;margin:16px 0 8px;color:var(--accent2)}
+.msg.ai h3:first-child,.msg.ai h2:first-child{margin-top:0}
+.msg.ai p{margin:6px 0;line-height:1.8}
+.msg.ai p:first-child{margin-top:0}
+.msg.ai strong{color:var(--accent2)}
+.msg.ai code{padding:2px 6px;background:rgba(0,212,255,.1);border-radius:4px;font-size:12px;color:var(--accent2)}
+.msg.ai ul{padding-left:18px;margin:4px 0}
+.msg.ai li{margin:2px 0;list-style:disc}
+.msg.ai hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+.msg.ai br+br{content:'';display:block;margin:4px 0}
+.welcome-card{align-self:center;display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,rgba(0,102,255,.06),rgba(0,212,255,.04));border:1px solid rgba(0,212,255,.12);border-radius:var(--radius-lg);padding:20px 28px;max-width:92%;margin:20px 0;animation:fadeUp .4s}
+.welcome-card .avatar{width:56px;height:56px;flex-shrink:0}
+.welcome-card .avatar svg{width:100%;height:100%}
+.welcome-card .text{font-size:13px;color:var(--text2);line-height:1.8}
+.welcome-card .text strong{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700}
+.typing-row{display:flex;align-items:center;gap:12px;align-self:flex-start;padding:0 28px}
+.typing-row .mini-avatar{width:28px;height:28px;flex-shrink:0;opacity:.6}
+.typing-row .mini-avatar svg{width:100%;height:100%}
+.typing{display:none;padding:10px 18px;background:var(--card);border-radius:14px;border-bottom-left-radius:4px;border:1px solid var(--border)}
+.typing.active{display:flex;align-items:center;gap:4px}
+.typing .dot{width:6px;height:6px;border-radius:50%;background:var(--text3);animation:bounce 1.4s infinite ease-in-out}
+.typing .dot:nth-child(2){animation-delay:.2s}
+.typing .dot:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,80%,100%{transform:scale(.6)}40%{transform:scale(1)}}
+.chat-input-area{background:rgba(12,15,26,.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--border);padding:16px 28px}
+.chat-input-row{display:flex;gap:10px;max-width:900px;margin:0 auto;width:100%}
+.chat-input-row textarea{flex:1;padding:12px 18px;background:#1a1e30;border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-weight:500;font-family:var(--font);resize:none;outline:none;min-height:48px;max-height:140px;transition:all .2s;line-height:1.5}
+.chat-input-row textarea:focus{border-color:rgba(0,212,255,.3);box-shadow:0 0 0 3px rgba(0,212,255,.06)}
+.chat-input-row textarea::placeholder{color:var(--text3)}
+.btn-send{padding:12px 24px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:var(--radius);color:#000;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;letter-spacing:.3px;font-family:var(--font)}
+.btn-send:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,102,255,.3)}
+.btn-send:disabled{opacity:.3;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* log */
+.log-content{flex:1;overflow-y:auto;padding:24px 28px;display:flex;gap:24px;flex-wrap:wrap;align-content:flex-start}
+.log-content::-webkit-scrollbar{width:4px}
+.log-content::-webkit-scrollbar-track{background:transparent}
+.log-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.glass-card{background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;box-shadow:var(--shadow)}
+.card-title{font-size:11px;font-weight:600;color:var(--text2);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.card-title .accent{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.log-form{flex:1;min-width:320px;max-width:420px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group.full{grid-column:1/-1}
+.form-group label{font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.4px;text-transform:uppercase}
+.form-group input,.form-group select{padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;outline:none;transition:all .2s;font-family:var(--font)}
+.form-group input:focus,.form-group select:focus{border-color:rgba(0,212,255,.3);box-shadow:0 0 0 3px rgba(0,212,255,.06)}
+.form-group input::placeholder{color:var(--text3);font-size:12px}
+.btn-primary{padding:10px 20px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;color:#000;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.3px;width:100%;margin-top:6px;font-family:var(--font)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,102,255,.25)}
+.btn-primary:disabled{opacity:.3;cursor:not-allowed;transform:none}
+.log-history{flex:2;min-width:420px}
+.log-table-wrap{overflow-x:auto}
+.log-table{width:100%;border-collapse:collapse;font-size:12px}
+.log-table th{text-align:left;padding:10px 14px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);font-size:10px;letter-spacing:.6px;text-transform:uppercase}
+.log-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--text)}
+.log-table tr:hover td{background:var(--surface)}
+.log-table .exercise-name{font-weight:600;color:var(--accent2)}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text3);font-size:13px}
+.empty-state .icon{font-size:32px;display:block;margin-bottom:8px}
+
+/* analysis */
+.analysis-content{flex:1;overflow-y:auto;padding:24px 28px}
+.analysis-content::-webkit-scrollbar{width:4px}
+.analysis-content::-webkit-scrollbar-track{background:transparent}
+.analysis-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stat-card{background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;text-align:center;transition:all .3s}
+.stat-card:hover{border-color:rgba(0,212,255,.15);transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,102,255,.08)}
+.stat-card .num{font-size:26px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-card .label{font-size:10px;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;margin-top:6px;font-weight:500}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.chart-card{background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;transition:all .3s}
+.chart-card:hover{border-color:rgba(0,212,255,.1)}
+.chart-card.full{grid-column:1/-1}
+.chart-card h3{font-size:12px;color:var(--text3);font-weight:500;letter-spacing:.4px;margin-bottom:16px}
+.chart-card h3 .hl{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:600}
+.chart-wrap{height:220px;position:relative}
+.chart-wrap.tall{height:280px}
+
+/* toast */
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:var(--radius);font-size:13px;z-index:1000;display:none;animation:slideUp .3s ease-out;box-shadow:var(--shadow);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);min-width:200px;font-weight:500}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.toast.success{background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.2);color:var(--success);display:block}
+.toast.error{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.2);color:var(--danger);display:block}
+
+@media(max-width:768px){
+  .sidebar{width:56px}.log-form{min-width:100%}.log-history{min-width:100%}
+  .charts-grid{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}
+  .msg{max-width:90%}.history-panel.open{width:200px}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- sidebar -->
+<div class="sidebar">
+  <div class="logo">K</div>
+  <div class="nav-group">
+    <div class="nav-item-wrap">
+      <div class="nav-item active" id="nav-chat" onclick="switchTab('chat')">💬</div>
+      <div class="nav-tooltip">聊天</div>
+    </div>
+    <div class="nav-item-wrap">
+      <div class="nav-item" id="nav-log" onclick="switchTab('log')">📊</div>
+      <div class="nav-tooltip">记录</div>
+    </div>
+    <div class="nav-item-wrap">
+      <div class="nav-item" id="nav-analysis" onclick="switchTab('analysis')">📈</div>
+      <div class="nav-tooltip">分析</div>
+    </div>
+    <div class="nav-item-wrap">
+      <div class="nav-item" id="nav-history" onclick="toggleHistory()">📋</div>
+      <div class="nav-tooltip">历史</div>
+    </div>
+    <div class="nav-item-wrap">
+      <a href="/analysis" style="text-decoration:none;">
+        <div class="nav-item">📹</div>
+        <div class="nav-tooltip">动作分析</div>
+      </a>
+    </div>
+
+    {% if is_admin %}
+    <div class="nav-item-wrap">
+      <a href="{{ url_for('data_view') }}" style="text-decoration:none;">
+        <div class="nav-item">🗄️</div>
+        <div class="nav-tooltip">数据</div>
+      </a>
+    </div>
+    {% endif %}
+  </div>
+  <div class="spacer"></div>
+  <a href="{{ url_for('logout') }}" class="logout-btn" title="退出">🚪</a>
+</div>
+
+<!-- main -->
+<div class="main">
+  <div class="topbar">
+    <h2>🏋️ <span>AI</span> 健身教练</h2>
+    <div class="user-info"><span class="dot"></span><span>{{ display_name }}</span></div>
+  </div>
+
+  <div class="main-body">
+    <!-- history panel -->
+    <div class="history-panel" id="historyPanel">
+      <div class="history-header">
+        <span class="history-title">📋 对话历史</span>
+        <span class="history-close" onclick="toggleHistory()">✕</span>
+      </div>
+      <div class="history-list" id="historyList"><div class="history-loading">加载中...</div></div>
+      <div class="history-new" onclick="startNewChat()">+ 新对话</div>
+    </div>
+
+    <!-- chat panel -->
+    <div class="panel active" id="panel-chat">
+      <div class="messages" id="messages">
+        <div class="welcome-card">
+          <div class="avatar">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <ellipse cx="50" cy="65" rx="28" ry="22" fill="#4a90d9"/>
+              <ellipse cx="50" cy="68" rx="18" ry="14" fill="#7ab8f0"/>
+              <ellipse cx="22" cy="22" rx="16" ry="22" fill="#4a90d9" transform="rotate(-20 22 22)"/>
+              <ellipse cx="22" cy="22" rx="10" ry="16" fill="#7ab8f0" transform="rotate(-20 22 22)"/>
+              <ellipse cx="78" cy="22" rx="16" ry="22" fill="#4a90d9" transform="rotate(20 78 22)"/>
+              <ellipse cx="78" cy="22" rx="10" ry="16" fill="#7ab8f0" transform="rotate(20 78 22)"/>
+              <ellipse cx="50" cy="42" rx="26" ry="24" fill="#4a90d9"/>
+              <ellipse cx="38" cy="38" rx="11" ry="12" fill="white"/>
+              <ellipse cx="62" cy="38" rx="11" ry="12" fill="white"/>
+              <ellipse cx="40" cy="39" rx="6" ry="7" fill="#1a1a2e"/>
+              <ellipse cx="64" cy="39" rx="6" ry="7" fill="#1a1a2e"/>
+              <circle cx="42" cy="36" r="2.5" fill="white"/>
+              <circle cx="66" cy="36" r="2.5" fill="white"/>
+              <ellipse cx="50" cy="47" rx="4" ry="3" fill="#2a2a4a"/>
+              <path d="M42 54 Q50 62 58 54" fill="none" stroke="#2a2a4a" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="text">
+            你好！我是 <strong>史迪奇</strong>，你的 AI 健身教练 🏋️<br>
+            告诉我你的身体情况和目标，我来帮你制定训练计划 💪
+          </div>
+        </div>
+      </div>
+      <div class="typing-row">
+        <div class="mini-avatar">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="50" cy="65" rx="28" ry="22" fill="#4a90d9"/>
+            <ellipse cx="50" cy="68" rx="18" ry="14" fill="#7ab8f0"/>
+            <ellipse cx="22" cy="22" rx="16" ry="22" fill="#4a90d9" transform="rotate(-20 22 22)"/>
+            <ellipse cx="22" cy="22" rx="10" ry="16" fill="#7ab8f0" transform="rotate(-20 22 22)"/>
+            <ellipse cx="78" cy="22" rx="16" ry="22" fill="#4a90d9" transform="rotate(20 78 22)"/>
+            <ellipse cx="78" cy="22" rx="10" ry="16" fill="#7ab8f0" transform="rotate(20 78 22)"/>
+            <ellipse cx="50" cy="42" rx="26" ry="24" fill="#4a90d9"/>
+            <ellipse cx="38" cy="38" rx="11" ry="12" fill="white"/>
+            <ellipse cx="62" cy="38" rx="11" ry="12" fill="white"/>
+            <ellipse cx="40" cy="39" rx="6" ry="7" fill="#1a1a2e"/>
+            <ellipse cx="64" cy="39" rx="6" ry="7" fill="#1a1a2e"/>
+            <circle cx="42" cy="36" r="2.5" fill="white"/>
+            <circle cx="66" cy="36" r="2.5" fill="white"/>
+            <ellipse cx="50" cy="47" rx="4" ry="3" fill="#2a2a4a"/>
+            <path d="M42 54 Q50 62 58 54" fill="none" stroke="#2a2a4a" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="typing" id="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      </div>
+      <div class="chat-input-area">
+        <div class="chat-input-row">
+          <textarea id="input" rows="1" placeholder="输入消息，告诉我今天的训练情况..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send();}"></textarea>
+          <button class="btn-send" id="sendBtn" onclick="send()">发送</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- log panel -->
+    <div class="panel" id="panel-log">
+      <div class="log-content">
+        <div class="glass-card log-form">
+          <div class="card-title"><span class="accent">✦</span> 记录训练</div>
+          <div class="form-grid">
+            <div class="form-group full"><label>动作名称</label><input id="log-exercise" placeholder="例: 杠铃卧推"></div>
+            <div class="form-group"><label>组数</label><input id="log-sets" type="number" placeholder="4" min="1"></div>
+            <div class="form-group"><label>次数</label><input id="log-reps" type="number" placeholder="8" min="1"></div>
+            <div class="form-group"><label>重量 (kg)</label><input id="log-weight" type="number" step="0.5" placeholder="40"></div>
+            <div class="form-group"><label>RPE</label><input id="log-rpe" type="number" step="0.5" min="1" max="10" placeholder="8"></div>
+            <div class="form-group full"><label>日期</label><input id="log-date" type="date"></div>
+            <div class="form-group full"><label>备注</label><input id="log-notes" placeholder="感受、调整等"></div>
+            <div class="form-group full"><button class="btn-primary" id="logSaveBtn" onclick="saveWorkout()">+ 保存记录</button></div>
+          </div>
+        </div>
+        <div class="glass-card log-history">
+          <div class="card-title"><span class="accent">✦</span> 训练历史</div>
+          <div id="log-table-container"><div class="empty-state"><span class="icon">📋</span>还没有训练记录，开始记录你的第一次训练吧</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- analysis panel -->
+    <div class="panel" id="panel-analysis">
+      <div class="analysis-content">
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card"><div class="num" id="stat-total">0</div><div class="label">总训练次数</div></div>
+          <div class="stat-card"><div class="num" id="stat-exercises">0</div><div class="label">不同动作</div></div>
+          <div class="stat-card"><div class="num" id="stat-streak">0</div><div class="label">连续天数</div></div>
+          <div class="stat-card"><div class="num" id="stat-best">-</div><div class="label">最佳动作</div></div>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-card"><h3>📈 <span class="hl">重量</span> 变化趋势</h3><div class="chart-wrap tall"><canvas id="weightChart"></canvas></div></div>
+          <div class="chart-card"><h3>📊 <span class="hl">训练容量</span> 分布</h3><div class="chart-wrap tall"><canvas id="volumeChart"></canvas></div></div>
+          <div class="chart-card full"><h3>🔥 <span class="hl">每组次数</span> 分布</h3><div class="chart-wrap"><canvas id="repsChart"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+let conversationId = "";
+let sessionId = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+let charts = {};
+let historyOpen = false;
+let allConversations = [];
+
+// tooltip
+document.querySelectorAll('.nav-item-wrap').forEach(wrap => {
+  const tip = wrap.querySelector('.nav-tooltip');
+  if(!tip)return;
+  wrap.addEventListener('mouseenter',()=>{const r=wrap.querySelector('.nav-item')?.getBoundingClientRect();if(!r)return;tip.style.left=(r.right+10)+'px';tip.style.top=(r.top+r.height/2-tip.offsetHeight/2)+'px';tip.style.opacity='1'});
+  wrap.addEventListener('mouseleave',()=>{tip.style.opacity='0'});
+});
+
+// tab
+function switchTab(name){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  document.getElementById('nav-'+name).classList.add('active');
+  if(name==='log')loadWorkoutHistory();
+  if(name==='analysis')loadAnalysis();
+}
+
+// history toggle
+function toggleHistory(){
+  const p=document.getElementById('historyPanel');
+  historyOpen=!historyOpen;
+  p.classList.toggle('open',historyOpen);
+  if(historyOpen)loadConversations();
+}
+
+// load conversations
+async function loadConversations(){
+  const list=document.getElementById('historyList');
+  try{
+    const resp=await fetch('/api/conversations');
+    const data=await resp.json();
+    const convs=data.data||[];
+    allConversations=convs;
+    if(!convs.length){list.innerHTML='<div class="history-empty">暂无历史对话</div>';return}
+    list.innerHTML=convs.map(c=>{
+      const d=new Date(c.created_at*1000);
+      const ds=d.toLocaleDateString('zh-CN',{month:'short',day:'numeric'});
+      const name=c.name||'新对话';
+      return `<div class="history-item${c.id===conversationId?' active':''}" onclick="loadConversation('${c.id}')">${escHtml(name)}<div class="date">${ds}</div></div>`;
+    }).join('');
+  }catch(e){list.innerHTML='<div class="history-empty">加载失败</div>'}
+}
+
+// load conversation messages
+async function loadConversation(cid){
+  conversationId=cid;
+  document.querySelectorAll('.history-item').forEach(el=>el.classList.remove('active'));
+  document.querySelector(`.history-item[onclick*="'${cid}'"]`)?.classList.add('active');
+  const msgs=document.getElementById('messages');
+  try{
+    const resp=await fetch(`/api/conversations/${cid}/messages`);
+    const data=await resp.json();
+    const items=data.data||[];
+    msgs.innerHTML='';
+    for(const m of items){
+      if(m.query)addMessage(m.query,'user');
+      if(m.answer)addMessage(m.answer,'ai');
+    }
+    if(!items.length)msgs.innerHTML='<div class="empty-state" style="padding:40px">对话为空</div>';
+  }catch(e){msgs.innerHTML='<div class="empty-state" style="padding:40px">加载失败</div>'}
+  setTimeout(scrollToBottom,100);
+}
+
+// new chat
+function startNewChat(){
+  conversationId='';
+  document.querySelectorAll('.history-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('messages').innerHTML=`<div class="welcome-card"><div class="avatar"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><ellipse cx="50" cy="65" rx="28" ry="22" fill="#4a90d9"/><ellipse cx="50" cy="68" rx="18" ry="14" fill="#7ab8f0"/><ellipse cx="22" cy="22" rx="16" ry="22" fill="#4a90d9" transform="rotate(-20 22 22)"/><ellipse cx="22" cy="22" rx="10" ry="16" fill="#7ab8f0" transform="rotate(-20 22 22)"/><ellipse cx="78" cy="22" rx="16" ry="22" fill="#4a90d9" transform="rotate(20 78 22)"/><ellipse cx="78" cy="22" rx="10" ry="16" fill="#7ab8f0" transform="rotate(20 78 22)"/><ellipse cx="50" cy="42" rx="26" ry="24" fill="#4a90d9"/><ellipse cx="38" cy="38" rx="11" ry="12" fill="white"/><ellipse cx="62" cy="38" rx="11" ry="12" fill="white"/><ellipse cx="40" cy="39" rx="6" ry="7" fill="#1a1a2e"/><ellipse cx="64" cy="39" rx="6" ry="7" fill="#1a1a2e"/><circle cx="42" cy="36" r="2.5" fill="white"/><circle cx="66" cy="36" r="2.5" fill="white"/><ellipse cx="50" cy="47" rx="4" ry="3" fill="#2a2a4a"/><path d="M42 54 Q50 62 58 54" fill="none" stroke="#2a2a4a" stroke-width="2" stroke-linecap="round"/></svg></div><div class="text">你好！我是 <strong>史迪奇</strong>，你的 AI 健身教练 🏋️<br>告诉我你的身体情况和目标，我来帮你制定训练计划 💪</div></div>`;
+  if(historyOpen)loadConversations();
+}
+
+// toast
+function showToast(msg,type='success'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast '+type;
+  setTimeout(()=>{t.className='toast'},3000);
+}
+
+// chat
+function renderMd(text){
+  if(!text)return '';
+  // Escape HTML first
+  let h = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Headings ###
+  h = h.replace(/^### (.+)$/gm,'<h3>$1</h3>');
+  h = h.replace(/^## (.+)$/gm,'<h2>$1</h2>');
+  // Bold **text**
+  h = h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  // Inline code
+  h = h.replace(/`(.+?)`/g,'<code>$1</code>');
+  // Unordered lists
+  h = h.replace(/^- (.+)$/gm,'<li>$1</li>');
+  // Ordered lists
+  h = h.replace(/^\d+\. (.+)$/gm,'<li>$1</li>');
+  // Wrap consecutive <li> in <ul>
+  h = h.replace(/(<li>.*?<\/li>\n?)+/g,'<ul>$&</ul>');
+  // Horizontal rules
+  h = h.replace(/^---+$/gm,'<hr>');
+  // Split by double newline into paragraphs, wrap in <p>
+  let parts = h.split(/\n\n+/);
+  h = parts.map(p => {
+    p = p.trim();
+    if(!p) return '';
+    // Don't wrap headings/lists/hr in <p>
+    if(p.startsWith('<h')||p.startsWith('<ul')||p.startsWith('<hr')) return p;
+    return '<p>'+p.replace(/\n/g,'<br>')+'</p>';
+  }).join('\n');
+  return h;
+}
+
+function addMessage(content,role){
+  const msgs=document.getElementById('messages');
+  if(role==='user'){
+    const div=document.createElement('div');div.className='msg user';div.textContent=content;msgs.appendChild(div);
+  }else{
+    const row=document.createElement('div');row.className='ai-row';
+    const av=document.createElement('div');av.className='ai-avatar';
+    av.innerHTML='<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><ellipse cx="50" cy="65" rx="28" ry="22" fill="#4a90d9"/><ellipse cx="50" cy="68" rx="18" ry="14" fill="#7ab8f0"/><ellipse cx="22" cy="22" rx="16" ry="22" fill="#4a90d9" transform="rotate(-20 22 22)"/><ellipse cx="22" cy="22" rx="10" ry="16" fill="#7ab8f0" transform="rotate(-20 22 22)"/><ellipse cx="78" cy="22" rx="16" ry="22" fill="#4a90d9" transform="rotate(20 78 22)"/><ellipse cx="78" cy="22" rx="10" ry="16" fill="#7ab8f0" transform="rotate(20 78 22)"/><ellipse cx="50" cy="42" rx="26" ry="24" fill="#4a90d9"/><ellipse cx="38" cy="38" rx="11" ry="12" fill="white"/><ellipse cx="62" cy="38" rx="11" ry="12" fill="white"/><ellipse cx="40" cy="39" rx="6" ry="7" fill="#1a1a2e"/><ellipse cx="64" cy="39" rx="6" ry="7" fill="#1a1a2e"/><circle cx="42" cy="36" r="2.5" fill="white"/><circle cx="66" cy="36" r="2.5" fill="white"/><ellipse cx="50" cy="47" rx="4" ry="3" fill="#2a2a4a"/><path d="M42 54 Q50 62 58 54" fill="none" stroke="#2a2a4a" stroke-width="2" stroke-linecap="round"/></svg>';
+    const d=document.createElement('div');d.className='msg ai';d.innerHTML=renderMd(content||'');
+    row.appendChild(av);row.appendChild(d);msgs.appendChild(row);
+  }
+  scrollToBottom();
+}
+function scrollToBottom(){document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight}
+function setTyping(show){document.getElementById('typing').classList.toggle('active',show)}
+
+async function send(){
+  const input=document.getElementById('input');
+  const query=input.value.trim();
+  if(!query)return;
+  input.value='';input.style.height='auto';
+  addMessage(query,'user');
+  const sendBtn=document.getElementById('sendBtn');
+  sendBtn.disabled=true;setTyping(true);
+
+  if(!conversationId)document.querySelector('.welcome-card')?.remove();
+
+  try{
+    const resp=await fetch('/api/chat',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query,conversation_id:conversationId,session_id:sessionId})
+    });
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const data=await resp.json();
+    if(data.error){showToast(data.error,'error');return}
+    if(data.answer){
+      let txt=data.answer.replace(/<think>[\s\S]*?<\/think>/g,'');
+      conversationId=data.conversation_id||conversationId;
+      addMessage(txt,'ai');
+    }
+    if(historyOpen)loadConversations();
+  }catch(e){
+    if(streamEl)streamEl.textContent='请求失败: '+e.message;
+  }finally{
+    sendBtn.disabled=false;setTyping(false);
+  }
+}
+
+// workout log
+async function loadWorkoutHistory(){
+  const c=document.getElementById('log-table-container');
+  try{
+    const r=await fetch('/api/workouts');const d=await r.json();
+    const rows=d.rows||d;
+    if(!Array.isArray(rows)||!rows.length){c.innerHTML='<div class="empty-state"><span class="icon">📋</span>还没有训练记录</div>';return}
+    let h='<div class="log-table-wrap"><table class="log-table"><thead><tr><th>日期</th><th>动作</th><th>组数</th><th>次数</th><th>重量</th><th>RPE</th><th>备注</th></tr></thead><tbody>';
+    for(const r of rows){
+      const d=r.workout_date?r.workout_date.slice(0,10):'-';
+      h+=`<tr><td>${d}</td><td class="exercise-name">${r.exercise||'-'}</td><td>${r.sets||0}</td><td>${r.reps||0}</td><td>${r.weight||0} kg</td><td>${r.rpe||'-'}</td><td style="color:var(--text3);font-size:11px">${(r.notes||'').slice(0,20)}</td></tr>`;
+    }
+    h+='</tbody></table></div>';c.innerHTML=h;
+  }catch(e){c.innerHTML='<div class="empty-state">加载失败</div>'}
+}
+
+async function saveWorkout(){
+  const btn=document.getElementById('logSaveBtn');btn.disabled=true;
+  const p={exercise:document.getElementById('log-exercise').value.trim(),sets:parseInt(document.getElementById('log-sets').value)||0,reps:parseInt(document.getElementById('log-reps').value)||0,weight:parseFloat(document.getElementById('log-weight').value)||0,rpe:document.getElementById('log-rpe').value?parseFloat(document.getElementById('log-rpe').value):null,workout_date:document.getElementById('log-date').value||null,notes:document.getElementById('log-notes').value.trim()};
+  if(!p.exercise){showToast('请填写动作名称','error');btn.disabled=false;return}
+  try{
+    const r=await fetch('/api/workouts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    const d=await r.json();
+    if(d.error){showToast(d.error,'error');return}
+    showToast('记录已保存 ✓');
+    ['log-exercise','log-sets','log-reps','log-weight','log-rpe','log-notes'].forEach(id=>document.getElementById(id).value='');
+    loadWorkoutHistory();
+  }catch(e){showToast(e.message,'error')}
+  finally{btn.disabled=false}
+}
+
+// analysis
+async function loadAnalysis(){
+  try{
+    const r=await fetch('/api/workouts?days=90');const d=await r.json();
+    const rows=d.rows||d;
+    if(!Array.isArray(rows)||!rows.length)return;
+    const total=rows.length,exercises=[...new Set(rows.map(r=>r.exercise))].length;
+    const dates=[...new Set(rows.filter(r=>r.workout_date).map(r=>r.workout_date.slice(0,10)))].sort().reverse();
+    let streak=0;const td=new Date();
+    for(let i=0;i<dates.length;i++){const d1=new Date(dates[i]),d2=new Date(td);d2.setDate(d2.getDate()-i);if(d1.toDateString()===d2.toDateString())streak++;else break}
+    const vol={};rows.forEach(r=>{const e=r.exercise;vol[e]=(vol[e]||0)+(r.sets||0)*(r.reps||0)*(r.weight||0)});
+    const best=Object.entries(vol).sort((a,b)=>b[1]-a[1])[0];
+    document.getElementById('stat-total').textContent=total;
+    document.getElementById('stat-exercises').textContent=exercises;
+    document.getElementById('stat-streak').textContent=streak;
+    document.getElementById('stat-best').textContent=best?best[0]:'-';
+    const byDate={};
+    rows.forEach(r=>{const d=r.workout_date?r.workout_date.slice(0,10):'unknown';if(!byDate[d])byDate[d]={weight:0,volume:0,count:0};byDate[d].weight=Math.max(byDate[d].weight,r.weight||0);byDate[d].volume+=(r.sets||0)*(r.reps||0)*(r.weight||0);byDate[d].count++});
+    const sorted=Object.keys(byDate).sort(),wd=sorted.map(d=>byDate[d].weight),vd=sorted.map(d=>byDate[d].volume),lb=sorted.map(d=>d.slice(5));
+    const rr={'1-5':0,'6-10':0,'11-15':0,'16-20':0,'20+':0};
+    rows.forEach(r=>{const n=r.reps||0;if(n<=5)rr['1-5']++;else if(n<=10)rr['6-10']++;else if(n<=15)rr['11-15']++;else if(n<=20)rr['16-20']++;else rr['20+']++});
+    const th={color:'#8890a0',grid:{color:'rgba(255,255,255,.04)',drawBorder:false},ticks:{color:'#8890a0',font:{size:10,family:"'PingFang SC',sans-serif"}}};
+    if(charts.weight)charts.weight.destroy();
+    if(charts.volume)charts.volume.destroy();
+    if(charts.reps)charts.reps.destroy();
+    charts.weight=new Chart(document.getElementById('weightChart'),{type:'line',data:{labels:lb,datasets:[{label:'最大重量 (kg)',data:wd,borderColor:'#0066ff',backgroundColor:'rgba(0,102,255,.1)',borderWidth:2,pointRadius:3,pointBackgroundColor:'#0066ff',fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:th,y:{...th,beginAtZero:true}}}});
+    charts.volume=new Chart(document.getElementById('volumeChart'),{type:'bar',data:{labels:lb,datasets:[{label:'训练容量',data:vd,backgroundColor:'rgba(0,212,255,.3)',borderColor:'#00d4ff',borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:th,y:{...th,beginAtZero:true}}}});
+    charts.reps=new Chart(document.getElementById('repsChart'),{type:'doughnut',data:{labels:Object.keys(rr),datasets:[{data:Object.values(rr),backgroundColor:['rgba(0,102,255,.6)','rgba(0,212,255,.6)','rgba(0,255,136,.6)','rgba(124,58,237,.6)','rgba(255,71,87,.6)'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8890a0',font:{size:11,family:"'PingFang SC',sans-serif"},padding:12,usePointStyle:true}}}}});
+  }catch(e){}
+}
+
+function escHtml(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+</script>
+</body>
+</html>

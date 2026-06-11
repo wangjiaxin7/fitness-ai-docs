@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>训练反馈 - 小铁</title>
+<style>
+:root {
+  --bg: #0d0f1a;
+  --card: rgba(255,255,255,0.04);
+  --card-border: rgba(255,255,255,0.06);
+  --text: #f0f4f8;
+  --text-dim: #8890a0;
+  --text-muted: #6b7280;
+  --primary: #6c5ce7;
+  --primary-glow: rgba(108,92,231,0.3);
+  --green: #00b894;
+  --green-bg: rgba(0,184,148,0.12);
+  --yellow: #fdcb6e;
+  --yellow-bg: rgba(253,203,110,0.12);
+  --red: #e17055;
+  --red-bg: rgba(225,112,85,0.12);
+  --blue: #74b9ff;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --input-bg: #1a1e30;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+.nav {
+  display: flex; align-items: center; gap: 20px;
+  padding: 16px 32px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--card-border);
+}
+.nav a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+.nav a:hover { color: var(--text); }
+.nav .title {
+  font-size: 18px; font-weight: 600;
+  background: linear-gradient(135deg, var(--primary), var(--blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.nav .user { margin-left: auto; font-size: 13px; color: var(--text-dim); }
+.container {
+  max-width: 680px; margin: 0 auto; padding: 32px 20px;
+}
+h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+.subtitle { color: var(--text-dim); font-size: 14px; margin-bottom: 32px; }
+
+/* Card */
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(12px);
+}
+
+/* Form */
+.form-group { margin-bottom: 20px; }
+.form-label {
+  display: block; font-size: 13px; font-weight: 500;
+  color: var(--text-dim); margin-bottom: 6px;
+}
+.form-input, .form-select, .form-textarea {
+  width: 100%; padding: 10px 14px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--primary);
+}
+.form-textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+.form-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Slider */
+.slider-container { padding: 8px 0; }
+.slider-container input[type="range"] {
+  width: 100%; height: 4px;
+  -webkit-appearance: none; appearance: none;
+  background: var(--card-border);
+  border-radius: 2px;
+  outline: none;
+}
+.slider-container input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 18px; height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--blue));
+  cursor: pointer;
+}
+.slider-value {
+  font-size: 24px; font-weight: 700; margin-top: 6px;
+}
+.slider-labels {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--text-muted); margin-top: 2px;
+}
+
+/* Buttons */
+.btn {
+  display: inline-block; padding: 12px 32px; border-radius: var(--radius-sm);
+  font-size: 15px; font-weight: 500; cursor: pointer; border: none;
+  transition: all 0.2s; width: 100%;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), #a29bfe);
+  color: white;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px var(--primary-glow);
+}
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* Result */
+.message-box {
+  background: var(--green-bg);
+  border: 1px solid rgba(0,184,148,0.2);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+.message-box.warn { background: var(--yellow-bg); border-color: rgba(253,203,110,0.2); }
+.message-box.error { background: var(--red-bg); border-color: rgba(225,112,85,0.2); }
+
+/* Loader */
+.loader {
+  display: inline-block; width: 20px; height: 20px;
+  border: 2px solid var(--card-border); border-top-color: var(--primary);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Exercise entry */
+.exercise-entry {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.exercise-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px;
+}
+.exercise-header select { flex: 1; }
+.btn-remove {
+  background: none; border: none; color: var(--red);
+  cursor: pointer; font-size: 18px; padding: 4px 8px;
+}
+.btn-add-exercise {
+  background: none; border: 1px dashed var(--card-border);
+  border-radius: var(--radius-sm); padding: 10px;
+  color: var(--text-dim); cursor: pointer; width: 100%;
+  font-size: 13px; transition: all 0.2s;
+}
+.btn-add-exercise:hover { border-color: var(--primary); color: var(--primary); }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <span class="title">🏋️ 小铁</span>
+  <a href="/chat">对话</a>
+  <a href="/decision">训练决策</a>
+  <a href="/feedback">训练反馈</a>
+  <a href="/data">数据</a>
+  <span class="user">{{ display_name }}</span>
+</div>
+
+<div class="container">
+  <h1>📝 训练反馈</h1>
+  <p class="subtitle">记录本次训练情况，系统会自动评估并给出调整建议</p>
+
+  <div class="card">
+    <form id="feedback-form">
+
+      <!-- 训练动作 -->
+      <div class="form-group">
+        <div class="form-label">训练动作</div>
+        <div id="exercises-container">
+          <div class="exercise-entry" data-index="0">
+            <div class="exercise-header">
+              <select class="form-input exercise-select" style="margin-right:8px;">
+                <option value="">选择动作</option>
+                <optgroup label="上肢推">
+                  <option>卧推</option><option>上斜卧推</option><option>哑铃卧推</option>
+                  <option>推举</option><option>哑铃推举</option>
+                </optgroup>
+                <optgroup label="上肢拉">
+                  <option>坐姿划船</option><option>杠铃划船</option><option>引体向上</option>
+                  <option>高位下拉</option>
+                </optgroup>
+                <optgroup label="下肢">
+                  <option>深蹲</option><option>腿举</option><option>硬拉</option>
+                  <option>腿弯举</option><option>腿屈伸</option>
+                </optgroup>
+                <optgroup label="手臂">
+                  <option>二头弯举</option><option>三头臂屈伸</option>
+                </optgroup>
+              </select>
+              <button type="button" class="btn-remove" onclick="removeExercise(this)" style="display:none;">✕</button>
+            </div>
+            <div class="form-row">
+              <div><input type="number" class="form-input ex-sets" placeholder="组数" min="1" max="20"></div>
+              <div><input type="number" class="form-input ex-reps" placeholder="次数" min="1" max="50"></div>
+              <div><input type="number" class="form-input ex-weight" placeholder="重量 kg" min="0" step="0.5"></div>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn-add-exercise" onclick="addExercise()" style="margin-top:8px;">+ 添加动作</button>
+      </div>
+
+      <!-- 完成度 -->
+      <div class="form-group">
+        <div class="form-label">完成度</div>
+        <div class="slider-container">
+          <input type="range" id="completion" min="0" max="100" value="85">
+          <div class="slider-value" id="completion-val">85%</div>
+          <div class="slider-labels"><span>完全没完成</span><span>全部完成</span></div>
+        </div>
+      </div>
+
+      <!-- 疲劳感 -->
+      <div class="form-group">
+        <div class="form-label">疲劳感</div>
+        <div class="slider-container">
+          <input type="range" id="fatigue" min="1" max="10" value="6">
+          <div class="slider-value" id="fatigue-val">6/10</div>
+          <div class="slider-labels"><span>轻松</span><span>力竭</span></div>
+        </div>
+      </div>
+
+      <!-- 情绪和睡眠 -->
+      <div class="form-row-2">
+        <div class="form-group">
+          <div class="form-label">情绪</div>
+          <select class="form-select" id="mood">
+            <option value="5">非常好</option>
+            <option value="4" selected>好</option>
+            <option value="3">一般</option>
+            <option value="2">差</option>
+            <option value="1">非常差</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <div class="form-label">睡眠质量</div>
+          <select class="form-select" id="sleep">
+            <option value="5">非常好</option>
+            <option value="4">好</option>
+            <option value="3" selected>一般</option>
+            <option value="2">差</option>
+            <option value="1">非常差</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 备注 -->
+      <div class="form-group">
+        <div class="form-label">备注</div>
+        <textarea class="form-textarea" id="notes" placeholder="记录训练感受、遇到的问题或额外信息…"></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="btn-submit">📤 提交训练反馈</button>
+    </form>
+    <div id="result-area" style="display:none;"></div>
+  </div>
+</div>
+
+<script>
+// ── 训练日期 ──
+const TODAY = new Date().toISOString().split('T')[0];
+
+// ── 动作计数器 ──
+let exerciseCount = 1;
+
+function addExercise() {
+  const container = document.getElementById('exercises-container');
+  const idx = exerciseCount++;
+  const div = document.createElement('div');
+  div.className = 'exercise-entry';
+  div.dataset.index = idx;
+  div.innerHTML = `
+    <div class="exercise-header">
+      <select class="form-input exercise-select" style="margin-right:8px;">
+        <option value="">选择动作</option>
+        <optgroup label="上肢推">
+          <option>卧推</option><option>上斜卧推</option><option>哑铃卧推</option>
+          <option>推举</option><option>哑铃推举</option>
+        </optgroup>
+        <optgroup label="上肢拉">
+          <option>坐姿划船</option><option>杠铃划船</option><option>引体向上</option>
+          <option>高位下拉</option>
+        </optgroup>
+        <optgroup label="下肢">
+          <option>深蹲</option><option>腿举</option><option>硬拉</option>
+          <option>腿弯举</option><option>腿屈伸</option>
+        </optgroup>
+        <optgroup label="手臂">
+          <option>二头弯举</option><option>三头臂屈伸</option>
+        </optgroup>
+      </select>
+      <button type="button" class="btn-remove" onclick="removeExercise(this)">✕</button>
+    </div>
+    <div class="form-row">
+      <div><input type="number" class="form-input ex-sets" placeholder="组数" min="1" max="20"></div>
+      <div><input type="number" class="form-input ex-reps" placeholder="次数" min="1" max="50"></div>
+      <div><input type="number" class="form-input ex-weight" placeholder="重量 kg" min="0" step="0.5"></div>
+    </div>
+  `;
+  container.appendChild(div);
+}
+
+function removeExercise(btn) {
+  btn.closest('.exercise-entry').remove();
+}
+
+// ── 滑块 ──
+['completion','fatigue'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    const val = el.value;
+    const display = id === 'completion' ? val + '%' : val + '/10';
+    document.getElementById(id + '-val').textContent = display;
+  });
+});
+
+// ── 提交 ──
+document.getElementById('feedback-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit');
+  const resultDiv = document.getElementById('result-area');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loader"></span> 提交中...';
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div class="loader"></div>';
+
+  // 收集动作数据
+  const entries = document.querySelectorAll('.exercise-entry');
+  const exercises = [];
+  let totalVolume = 0;
+  entries.forEach(entry => {
+    const name = entry.querySelector('.exercise-select').value;
+    const sets = parseInt(entry.querySelector('.ex-sets').value) || 0;
+    const reps = parseInt(entry.querySelector('.ex-reps').value) || 0;
+    const weight = parseFloat(entry.querySelector('.ex-weight').value) || 0;
+    if (name) {
+      exercises.push({ exercise: name, sets, reps, weight });
+      totalVolume += sets * reps * weight;
+    }
+  });
+
+  const completionRate = parseInt(document.getElementById('completion').value) / 100;
+  const fatigueLevel = parseInt(document.getElementById('fatigue').value);
+  const moodRating = parseInt(document.getElementById('mood').value);
+  const sleepQuality = parseInt(document.getElementById('sleep').value);
+  const notes = document.getElementById('notes').value;
+  const notesFull = exercises.map(e => `${e.exercise} ${e.weight}kg ${e.sets}组${e.reps}次`).join('; ') + (notes ? '; ' + notes : '');
+
+  try {
+    // 1. 保存训练记录到 memory-service
+    for (const ex of exercises) {
+      await fetch('/api/workout', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          exercise: ex.exercise, sets: ex.sets, reps: ex.reps, weight: ex.weight
+        })
+      });
+    }
+
+    // 2. 保存反馈到 memory-service
+    const fbResp = await fetch('/api/feedback/submit', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        completion_rate: completionRate,
+        total_volume: totalVolume,
+        fatigue_level: fatigueLevel,
+        mood_rating: moodRating,
+        sleep_quality: sleepQuality,
+        notes: notesFull
+      })
+    });
+
+    // 3. 触发决策引擎评估
+    const evalResp = await fetch('/api/decision/evaluate', {method:'POST'});
+    const evalData = await evalResp.json();
+    
+    const msg = evalData.user_message || '训练反馈已记录！继续加油💪';
+    const isWarn = evalData.decision?.action === 'deload' || evalData.decision?.action === 'force_deload';
+    resultDiv.innerHTML = `<div class="message-box${isWarn ? ' warn' : ''}">${msg}</div>`;
+    btn.innerHTML = '✅ 已提交';
+  } catch (err) {
+    resultDiv.innerHTML = `<div class="message-box error">提交失败: ${err.message}</div>`;
+    btn.disabled = false;
+    btn.innerHTML = '📤 提交训练反馈';
+  }
+});
+</script>
+
+</body>
+</html>

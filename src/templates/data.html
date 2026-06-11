@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据浏览 - AI 健身教练</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080a12;--surface:rgba(255,255,255,.06);--card:rgba(255,255,255,.07);
+  --border:rgba(255,255,255,.1);--accent:#0066ff;--accent2:#00d4ff;--accent3:#00ff88;
+  --text:#f0f4f8;--text2:#b0b8c8;--text3:#8890a0;--success:#00ff88;
+  --radius:12px;--font:'PingFang SC','Microsoft YaHei','Noto Sans SC','SF Pro Text',-apple-system,sans-serif;
+  --select-bg:#1a1e30;
+}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;
+  background-image:radial-gradient(ellipse at 20% 0%, rgba(0,102,255,.06) 0%, transparent 60%);
+}
+.header{
+  background:rgba(12,15,26,.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);padding:14px 28px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.header h1{font-size:15px;font-weight:600}
+.header h1 span{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header .links{display:flex;gap:16px;font-size:12px}
+.header .links a{color:var(--text2);text-decoration:none;transition:color .2s}
+.header .links a:hover{color:var(--accent2)}
+.content{padding:28px;max-width:1200px;margin:0 auto}
+
+.controls{display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+.controls label{font-size:12px;color:var(--text3);font-weight:500}
+.controls select{
+  padding:10px 16px;background:var(--select-bg);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:14px;font-weight:500;outline:none;
+  min-width:200px;font-family:var(--font);cursor:pointer;appearance:auto;-webkit-appearance:auto;
+}
+.controls select:focus{border-color:rgba(0,212,255,.4);box-shadow:0 0 0 3px rgba(0,212,255,.1)}
+.controls select option{background:var(--select-bg);color:var(--text);font-size:14px;padding:8px;min-height:32px}
+.controls .btn{
+  padding:8px 20px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;border-radius:8px;color:#000;font-size:12px;font-weight:700;cursor:pointer;
+  font-family:var(--font);transition:all .2s;
+}
+.controls .btn:hover{opacity:.9;transform:translateY(-1px)}
+
+.table-wrap{
+  overflow-x:auto;background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--border);border-radius:var(--radius);
+}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{
+  text-align:left;padding:10px 14px;color:var(--text3);font-weight:500;
+  border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;
+  top:0;background:rgba(12,15,26,.8);backdrop-filter:blur(10px);font-size:10px;letter-spacing:.6px;text-transform:uppercase;
+}
+td{padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--text);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:hover td{background:var(--surface)}
+.empty{text-align:center;padding:60px;color:var(--text3);font-size:13px}
+.loading{text-align:center;padding:60px;color:var(--text3)}
+
+.pagination{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:14px;border-top:1px solid var(--border);flex-wrap:wrap;
+}
+.pagination .page-btn{
+  padding:5px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:6px;color:var(--text2);font-size:11px;cursor:pointer;font-family:var(--font);transition:all .2s;
+}
+.pagination .page-btn:hover{border-color:rgba(0,212,255,.3);color:var(--accent2)}
+.pagination .page-btn:disabled{opacity:.25;cursor:not-allowed}
+.pagination .page-btn.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;border-color:transparent;font-weight:700}
+.pagination .page-info{font-size:11px;color:var(--text3);margin-right:8px}
+
+.stats-row{display:flex;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.stat-card{
+  background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px 20px;flex:1;min-width:150px;
+}
+.stat-card .label{font-size:10px;color:var(--text3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px;font-weight:500}
+.stat-card .value{font-size:22px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-card .sub{font-size:11px;color:var(--text2);margin-top:4px}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>📊 <span>数据</span>浏览</h1>
+  <div class="links">
+    <span style="color:var(--text2);font-size:12px;">{{ display_name }}</span>
+    <a href="{{ url_for('chat') }}">← 返回聊天</a>
+  </div>
+</div>
+
+<div class="content" id="app">
+  <div class="stats-row" id="statsRow" style="display:none;"></div>
+  <div class="controls">
+    <label>选择表</label>
+    <select id="tableSelect" onchange="onTableChange()">
+      <option value="">— 请选择 —</option>
+    </select>
+    <button class="btn" onclick="loadData(1)">查询</button>
+  </div>
+  <div class="table-wrap">
+    <div class="loading" id="loadingMsg">加载中...</div>
+    <div id="tableContainer" style="display:none;"></div>
+    <div class="pagination" id="pagination" style="display:none;"></div>
+  </div>
+</div>
+
+<script>
+let currentPage = 1, totalPages = 1, totalAll = 0;
+
+async function loadTables() {
+  const sel = document.getElementById("tableSelect");
+  try {
+    const resp = await fetch("/api/data/tables");
+    const data = await resp.json();
+    const tables = data.tables || [];
+    const priority = ["web_users","user_profiles","workout_logs","body_measurements","apps","messages","conversations","api_tokens","accounts","tenants"];
+    tables.sort((a,b)=>{const ai=priority.indexOf(a),bi=priority.indexOf(b);return(ai===-1?999:ai)-(bi===-1?999:bi)});
+    sel.innerHTML = '<option value="">— 请选择 —</option>' + tables.map(t => `<option value="${t}">${t}</option>`).join("");
+  } catch(e) { sel.innerHTML = '<option value="">加载失败</option>'; }
+  document.getElementById("loadingMsg").style.display = "none";
+}
+
+function onTableChange() {
+  const table = document.getElementById("tableSelect").value;
+  if (table) loadData(1);
+}
+
+async function loadData(page) {
+  const table = document.getElementById("tableSelect").value;
+  const container = document.getElementById("tableContainer");
+  const loading = document.getElementById("loadingMsg");
+  const pagination = document.getElementById("pagination");
+  const statsRow = document.getElementById("statsRow");
+  if (!table) { container.style.display = "none"; pagination.style.display = "none"; statsRow.style.display = "none"; return; }
+  currentPage = page;
+  loading.style.display = "block"; container.style.display = "none"; pagination.style.display = "none";
+  try {
+    const resp = await fetch("/api/data/query", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({table,page,page_size:20}) });
+    const data = await resp.json();
+    loading.style.display = "none";
+    if (data.error) { container.innerHTML = `<div class="empty">错误: ${data.error}</div>`; container.style.display = "block"; return; }
+    const rows = data.rows || [];
+    totalAll = data.total_all || 0;
+    totalPages = Math.ceil(totalAll / (data.page_size || 20)) || 1;
+    
+    // Stats for web_users
+    if (table === "web_users" && rows.length) {
+      const now = new Date();
+      let online24h=0, online7d=0, never=0;
+      rows.forEach(r => {
+        if (!r.last_login) { never++; return; }
+        const t = new Date(r.last_login), diff = (now - t) / 86400000;
+        if (diff <= 1) online24h++;
+        if (diff <= 7) online7d++;
+      });
+      statsRow.innerHTML = `
+        <div class="stat-card"><div class="label">总用户</div><div class="value">${totalAll}</div></div>
+        <div class="stat-card"><div class="label">今日活跃</div><div class="value">${online24h}</div><div class="sub">24小时内登录</div></div>
+        <div class="stat-card"><div class="label">本周活跃</div><div class="value">${online7d}</div><div class="sub">7天内登录</div></div>
+        <div class="stat-card"><div class="label">从未登录</div><div class="value" style="-webkit-text-fill-color:${never>0?'#ff6b7a':'#5a6475'}">${never}</div></div>`;
+      statsRow.style.display = "flex";
+    } else { statsRow.style.display = "none"; }
+    
+    if (rows.length === 0) { container.innerHTML = `<div class="empty">暂无数据</div>`; container.style.display = "block"; return; }
+    
+    const cols = Object.keys(rows[0]);
+    let html = '<table><thead><tr>'+cols.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr></thead><tbody>';
+    for (const row of rows) {
+      html += '<tr>'+cols.map(c => {
+        let val = row[c];
+        if (val === null || val === undefined) return '<td style="color:var(--text3)">NULL</td>';
+        val = String(val);
+        if (c === 'last_login' && val) {
+          const ago = timeAgo(val);
+          return `<td title="${esc(val)}">${esc(val)} <span style="color:var(--text3);font-size:11px;">(${ago})</span></td>`;
+        }
+        if (val.length > 80) val = val.slice(0,80)+'…';
+        return `<td title="${esc(String(row[c]))}">${esc(val)}</td>`;
+      }).join('')+'</tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html; container.style.display = "block";
+    
+    if (totalPages > 1) {
+      let p = `<span class="page-info">共 ${totalAll} 条 · 第 ${currentPage}/${totalPages} 页</span>`;
+      p += `<button class="page-btn" onclick="loadData(${currentPage-1})" ${currentPage<=1?'disabled':''}>‹</button>`;
+      const r=3, s=Math.max(1,currentPage-r), e=Math.min(totalPages,currentPage+r);
+      if (s>1) { p+=`<button class="page-btn" onclick="loadData(1)">1</button>`; if(s>2) p+=`<span style="color:var(--text3);padding:0 4px;font-size:11px;">…</span>`; }
+      for(let i=s;i<=e;i++) p+=`<button class="page-btn${i===currentPage?' active':''}" onclick="loadData(${i})">${i}</button>`;
+      if(e<totalPages) { if(e<totalPages-1) p+=`<span style="color:var(--text3);padding:0 4px;font-size:11px;">…</span>`; p+=`<button class="page-btn" onclick="loadData(${totalPages})">${totalPages}</button>`; }
+      p+=`<button class="page-btn" onclick="loadData(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>›</button>`;
+      pagination.innerHTML = p; pagination.style.display = "flex";
+    } else { pagination.style.display = "none"; }
+  } catch(e) { loading.style.display = "none"; container.innerHTML = `<div class="empty">请求失败: ${e.message}</div>`; container.style.display = "block"; }
+}
+
+function timeAgo(s) {
+  if(!s) return ""; const t = new Date(s), diff = (Date.now()-t)/1000;
+  if(diff<60) return "刚刚";
+  if(diff<3600) return Math.floor(diff/60)+"分钟前";
+  if(diff<86400) return Math.floor(diff/3600)+"小时前";
+  const d=Math.floor(diff/86400); return d<30?d+"天前":Math.floor(d/30)+"个月前";
+}
+function esc(s){if(!s) return ""; return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+loadTables();
+</script>
+</body>
+</html>

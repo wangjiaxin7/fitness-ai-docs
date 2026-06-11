@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>动作分析 - AI 健身教练</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #0d0f1a;
+  color: #e0e4f0;
+  min-height: 100vh;
+}
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 24px;
+  background: #151829;
+  border-bottom: 1px solid #1e2340;
+}
+.nav a {
+  color: #8890b0;
+  text-decoration: none;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  transition: all .2s;
+}
+.nav a:hover, .nav a.active { color: #f0f4f8; background: #1e2340; }
+.nav .spacer { flex: 1; }
+.nav .user { color: #b0b8c8; font-size: 13px; }
+
+.container { max-width: 960px; margin: 0 auto; padding: 24px; }
+h1 { font-size: 22px; margin-bottom: 20px; color: #f0f4f8; }
+
+/* Upload Zone */
+.upload-zone {
+  border: 2px dashed #2a3050;
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .3s;
+  background: #11142a;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: #4a7cff;
+  background: #14183a;
+}
+.upload-zone .icon { font-size: 48px; margin-bottom: 12px; color: #4a7cff; }
+.upload-zone p { color: #8890b0; font-size: 14px; margin: 4px 0; }
+.upload-zone .hint { color: #606880; font-size: 12px; }
+.upload-zone.has-file { border-color: #4caf50; background: #112a1a; }
+
+/* Exercise Selector */
+.exercise-bar {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin: 16px 0;
+}
+.exercise-btn {
+  padding: 6px 14px;
+  border: 1px solid #2a3050;
+  border-radius: 20px;
+  background: transparent;
+  color: #8890b0;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all .2s;
+}
+.exercise-btn:hover { border-color: #4a7cff; color: #b0c4ff; }
+.exercise-btn.active { background: #4a7cff; color: #fff; border-color: #4a7cff; }
+.exercise-btn.auto { border-style: dashed; }
+
+/* Progress */
+.progress-section { display: none; margin-top: 20px; }
+.progress-section.active { display: block; }
+.progress-bar {
+  height: 6px;
+  background: #1e2340;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4a7cff, #7c4aff);
+  border-radius: 3px;
+  transition: width .5s;
+  width: 0%;
+}
+.progress-text { color: #8890b0; font-size: 13px; }
+
+/* Results */
+.result-section { display: none; margin-top: 24px; }
+.result-section.active { display: block; }
+
+.result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.result-card {
+  background: #151829;
+  border: 1px solid #1e2340;
+  border-radius: 10px;
+  padding: 16px;
+}
+.result-card .label { font-size: 12px; color: #606880; margin-bottom: 4px; }
+.result-card .value { font-size: 28px; font-weight: bold; color: #f0f4f8; }
+.result-card .sub { font-size: 12px; color: #606880; margin-top: 4px; }
+.result-card .score-good { color: #4caf50; }
+.result-card .score-warn { color: #ff9800; }
+.result-card .score-bad { color: #f44336; }
+
+.media-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+.media-box {
+  background: #151829;
+  border: 1px solid #1e2340;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.media-box video, .media-box img {
+  width: 100%;
+  display: block;
+}
+.media-box .title {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #8890b0;
+  background: #11142a;
+  border-bottom: 1px solid #1e2340;
+}
+.media-box .title .badge {
+  float: right;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #1e2340;
+  color: #606880;
+}
+
+.error-box {
+  background: #2a1111;
+  border: 1px solid #5a2020;
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 16px;
+  color: #ff6b6b;
+  font-size: 13px;
+}
+
+/* File info */
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #151829;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #b0b8c8;
+}
+.file-info .remove-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #f44336;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 4px;
+}
+
+/* LLM Analysis */
+.llm-analysis {
+  background: #151829;
+  border: 1px solid #1e2340;
+  border-radius: 10px;
+  margin-top: 16px;
+  overflow: hidden;
+}
+.llm-header {
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0f4f8;
+  background: #11142a;
+  border-bottom: 1px solid #1e2340;
+}
+.llm-body {
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #c8d0e0;
+}
+.llm-body h3 {
+  font-size: 14px;
+  color: #7cacff;
+  margin: 8px 0 4px;
+}
+.llm-body strong { color: #f0f4f8; }
+.llm-loading { color: #606880; }
+.llm-loading .dots::after {
+  content: '';
+  animation: dots 1.5s steps(3, end) infinite;
+}
+@keyframes dots {
+  0% { content: ''; }
+  33% { content: '.'; }
+  66% { content: '..'; }
+  100% { content: '...'; }
+}
+.llm-error { color: #ff6b6b; }
+
+/* Log viewer */
+.log-toggle {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #606880;
+  cursor: pointer;
+  user-select: none;
+}
+.log-toggle:hover { color: #8890b0; }
+.log-content {
+  display: none;
+  margin-top: 8px;
+  padding: 12px;
+  background: #0a0c14;
+  border: 1px solid #1e2340;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 11px;
+  color: #606880;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+.log-content.open { display: block; }
+
+/* Stats Dashboard */
+.stats-section {
+  margin-top: 20px;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.stats-card {
+  background: #151829;
+  border: 1px solid #1e2340;
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+.stats-card .stat-value {
+  font-size: 26px;
+  font-weight: bold;
+  color: #f0f4f8;
+}
+.stats-card .stat-label {
+  font-size: 11px;
+  color: #606880;
+  margin-top: 2px;
+}
+.stats-card .stat-sub {
+  font-size: 11px;
+  color: #4a7cff;
+  margin-top: 2px;
+}
+.stats-breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .stats-grid, .stats-breakdown { grid-template-columns: 1fr; }
+}
+
+/* History Section */
+.history-section {
+  margin-top: 20px;
+  background: #151829;
+  border: 1px solid #1e2340;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #f0f4f8;
+  background: #11142a;
+  border-bottom: 1px solid #1e2340;
+  user-select: none;
+}
+.history-header:hover { background: #181c30; }
+.history-toggle { color: #606880; font-size: 12px; transition: transform .2s; }
+.history-toggle.open { transform: rotate(180deg); }
+.history-body {
+  padding: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #1e2340;
+  cursor: pointer;
+  transition: background .15s;
+  font-size: 13px;
+}
+.history-item:last-child { border-bottom: none; }
+.history-item:hover { background: #1a1e34; }
+.history-item .h-date { color: #606880; font-size: 12px; min-width: 72px; }
+.history-item .h-exercise { flex: 1; color: #c8d0e0; }
+.history-item .h-score {
+  font-weight: bold;
+  font-size: 15px;
+  min-width: 40px;
+  text-align: right;
+}
+.history-item .h-view {
+  font-size: 11px;
+  color: #606880;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #1e2340;
+}
+.history-loading, .history-empty {
+  padding: 24px;
+  text-align: center;
+  color: #606880;
+  font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .result-grid { grid-template-columns: 1fr; }
+  .media-section { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <a href="#" style="font-weight:bold;color:#f0f4f8;">🏋️ AI 健身教练</a>
+  <a href="/chat">对话</a>
+  <a href="/analysis" class="active">动作分析</a>
+  {% if is_admin %}<a href="/data">数据</a>{% endif %}
+  <div class="spacer"></div>
+  <span class="user">{{ display_name }}</span>
+  <a href="/logout">退出</a>
+</div>
+
+<div class="container">
+  <h1>📹 动作分析</h1>
+  <p style="color:#606880;font-size:13px;margin-bottom:16px;">
+    上传训练视频，自动识别动作并评分。支持 mp4/mov/avi，最长30秒，最大200MB。
+  </p>
+
+  <!-- Exercise Selector -->
+  <div class="exercise-bar">
+    <button class="exercise-btn auto active" data-exercise="">自动识别</button>
+  </div>
+
+  <!-- Upload -->
+  <div class="upload-zone" id="uploadZone">
+    <div class="icon">📤</div>
+    <p>拖拽视频到此处，或点击选择文件</p>
+    <p class="hint">支持 MP4 / MOV / AVI</p>
+    <input type="file" id="fileInput" accept=".mp4,.mov,.avi,.webm" hidden>
+  </div>
+  <div class="file-info" id="fileInfo" style="display:none">
+    <span>📹</span>
+    <span id="fileName"></span>
+    <span id="fileSize" style="color:#606880"></span>
+    <button class="remove-btn" onclick="resetUpload()">×</button>
+  </div>
+
+  <!-- Stats Dashboard -->
+  <div class="stats-section" id="statsSection" style="display:none;">
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="stats-breakdown" id="statsBreakdown"></div>
+  </div>
+
+  <!-- History -->
+  <div class="history-section" id="historySection">
+    <div class="history-header" onclick="toggleHistory()">
+      <span>📋 分析历史</span>
+      <span class="history-toggle">▼</span>
+    </div>
+    <div class="history-body" id="historyBody">
+      <div class="history-loading">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-section" id="progressSection">
+    <p style="color:#8890b0;font-size:13px;margin-bottom:8px;">⏳ 分析中...</p>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <p class="progress-text" id="progressText">正在处理视频帧...</p>
+  </div>
+
+  <!-- Result -->
+  <div class="result-section" id="resultSection"></div>
+</div>
+
+<script>
+const API_BASE = '/api/analysis';
+let selectedExercise = '';
+let currentJobId = null;
+
+// Load exercises
+fetch(`${API_BASE}/exercises`)
+  .then(r => r.json())
+  .then(data => {
+    const bar = document.querySelector('.exercise-bar');
+    (data.exercises || []).forEach(ex => {
+      const btn = document.createElement('button');
+      btn.className = 'exercise-btn';
+      btn.dataset.exercise = ex.name;
+      btn.textContent = ex.label;
+      btn.onclick = () => {
+        document.querySelectorAll('.exercise-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedExercise = ex.name;
+      };
+      bar.appendChild(btn);
+    });
+  });
+
+// Upload zone
+const zone = document.getElementById('uploadZone');
+const input = document.getElementById('fileInput');
+
+zone.onclick = () => input.click();
+zone.ondragover = e => { e.preventDefault(); zone.classList.add('dragover'); };
+zone.ondragleave = () => zone.classList.remove('dragover');
+zone.ondrop = e => {
+  e.preventDefault();
+  zone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+};
+input.onchange = () => { if (input.files.length) handleFile(input.files[0]); };
+
+function handleFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['mp4','mov','avi','webm'].includes(ext)) {
+    alert('不支持的文件格式');
+    return;
+  }
+  if (file.size > 200 * 1024 * 1024) {
+    alert('文件超过200MB限制');
+    return;
+  }
+  
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = (file.size / 1024 / 1024).toFixed(1) + ' MB';
+  document.getElementById('fileInfo').style.display = 'flex';
+  zone.classList.add('has-file');
+  zone.querySelector('p').textContent = '已选择文件，点击上传并分析';
+  zone.querySelector('.hint').textContent = '点击「上传并分析」按钮开始';
+  
+  uploadAndAnalyze(file);
+}
+
+function resetUpload() {
+  document.getElementById('fileInfo').style.display = 'none';
+  document.getElementById('resultSection').classList.remove('active');
+  document.getElementById('resultSection').innerHTML = '';
+  document.getElementById('progressSection').classList.remove('active');
+  document.getElementById('progressFill').style.width = '0%';
+  zone.classList.remove('has-file');
+  zone.querySelector('p').textContent = '拖拽视频到此处，或点击选择文件';
+  zone.querySelector('.hint').textContent = '支持 MP4 / MOV / AVI';
+  input.value = '';
+  currentJobId = null;
+}
+
+function uploadAndAnalyze(file) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('exercise', selectedExercise);
+  
+  document.getElementById('progressSection').classList.add('active');
+  document.getElementById('progressText').textContent = '正在上传...';
+  document.getElementById('progressFill').style.width = '10%';
+  
+  fetch(`${API_BASE}/analyze`, { method: 'POST', body: form })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      currentJobId = data.job_id;
+      document.getElementById('progressText').textContent = '上传完成，开始分析...';
+      document.getElementById('progressFill').style.width = '30%';
+      pollResult(data.job_id);
+    })
+    .catch(err => {
+      document.getElementById('progressSection').classList.remove('active');
+      const el = document.getElementById('resultSection');
+      el.innerHTML = '<div class="error-box"></div>';
+      el.querySelector('.error-box').textContent = '❌ ' + err.message;
+      el.classList.add('active');
+    });
+}
+
+function pollResult(jobId) {
+  let elapsed = 0;
+  const maxElapsed = 600; // 最多等10分钟
+  const interval = setInterval(() => {
+    fetch(`${API_BASE}/result/${jobId}`)
+      .then(r => r.json())
+      .then(data => {
+        elapsed += 2;
+        if (data.status === 'completed') {
+          clearInterval(interval);
+          document.getElementById('progressFill').style.width = '100%';
+          document.getElementById('progressText').textContent = '✅ 分析完成！';
+          setTimeout(() => showResult(jobId, data), 500);
+        } else if (data.status === 'error') {
+          clearInterval(interval);
+          document.getElementById('progressSection').classList.remove('active');
+          const el = document.getElementById('resultSection');
+          el.innerHTML = '<div class="error-box"></div>';
+          const box = el.querySelector('.error-box');
+          box.textContent = '❌ 分析失败: ' + (data.error || '未知错误');
+          if (data.log) {
+            const pre = document.createElement('pre');
+            pre.style.cssText = 'margin-top:8px;font-size:11px;color:#ff9999';
+            pre.textContent = data.log.slice(-500);
+            box.appendChild(pre);
+          }
+          el.classList.add('active');
+        } else if (elapsed >= maxElapsed) {
+          clearInterval(interval);
+          document.getElementById('progressSection').classList.remove('active');
+          const el = document.getElementById('resultSection');
+          el.innerHTML = '<div class="error-box"></div>';
+          el.querySelector('.error-box').textContent = '❌ 分析超时（超过10分钟），请重试';
+          el.classList.add('active');
+        } else {
+          const pct = Math.min(30 + elapsed * 2, 90);
+          document.getElementById('progressFill').style.width = pct + '%';
+          document.getElementById('progressText').textContent =
+            elapsed < 10 ? '正在分析视频帧...' :
+            elapsed < 30 ? '正在提取关节点...' :
+            '正在计算评分...';
+        }
+      })
+      .catch(() => {
+        elapsed += 2;
+        if (elapsed >= maxElapsed) {
+          clearInterval(interval);
+          document.getElementById('progressSection').classList.remove('active');
+          const el = document.getElementById('resultSection');
+          el.innerHTML = '<div class="error-box"></div>';
+          el.querySelector('.error-box').textContent = '❌ 网络错误，请检查连接后重试';
+          el.classList.add('active');
+        }
+      });
+  }, 2000);
+}
+
+function showResult(jobId, data) {
+  const r = data.result || {};
+  const details = r._details || r.details || {};
+  const resultData = r.result || r;
+  const viewType = r._view || '';
+  const exerciseLabel = resultData.label || '分析结果';
+  const totalScore = resultData.total || 0;
+  
+  // Score color
+  const scoreClass = totalScore >= 80 ? 'score-good' : totalScore >= 50 ? 'score-warn' : 'score-bad';
+  
+  // Build metric cards
+  let metricsHtml = '';
+  const ignoreKeys = ['total', 'label', '_details', '_view', 'exercise'];
+  let cardCount = 0;
+  
+  for (const [key, val] of Object.entries(resultData)) {
+    if (ignoreKeys.includes(key)) continue;
+    if (typeof val !== 'number') continue;
+    if (key.startsWith('_')) continue;
+    cardCount++;
+    const detail = details[key] || {};
+    const subParts = Object.entries(detail)
+      .filter(([k]) => k !== 'score')
+      .map(([k, v]) => `${k}: ${typeof v === 'number' ? v.toFixed(1) : v}`);
+    
+    metricsHtml += `
+      <div class="result-card">
+        <div class="label">${key}</div>
+        <div class="value ${val >= 80 ? 'score-good' : val >= 50 ? 'score-warn' : 'score-bad'}">${typeof val === 'number' ? Math.round(val) : val}</div>
+        ${subParts.length ? `<div class="sub">${subParts.join(' | ')}</div>` : ''}
+      </div>`;
+  }
+  
+  // If no individual metrics shown, show the details directly
+  if (cardCount === 0) {
+    for (const [key, val] of Object.entries(details)) {
+      if (typeof val === 'object') {
+        const subParts = Object.entries(val)
+          .filter(([k]) => k !== 'score')
+          .map(([k, v]) => `${k}: ${typeof v === 'number' ? v.toFixed(1) : v}`);
+        metricsHtml += `
+          <div class="result-card">
+            <div class="label">${key}</div>
+            <div class="value ${(val.score || 0) >= 80 ? 'score-good' : (val.score || 0) >= 50 ? 'score-warn' : 'score-bad'}">${Math.round(val.score || 0)}</div>
+            ${subParts.length ? `<div class="sub">${subParts.join(' | ')}</div>` : ''}
+          </div>`;
+        cardCount++;
+      }
+    }
+  }
+  
+  // If still empty, show placeholder
+  if (cardCount === 0) {
+    metricsHtml = '<div style="grid-column:1/-1;color:#606880;text-align:center;padding:20px;">无详细指标</div>';
+  }
+  
+  const viewLabel = viewType === 'side' ? '侧面' : viewType === 'front' ? '正面' : '自动';
+  const viewWarning = r.view_warning || '';
+  
+  document.getElementById('resultSection').innerHTML = `
+    <h2 style="font-size:18px;margin-bottom:4px;">${exerciseLabel}</h2>
+    <p style="color:#606880;font-size:12px;margin-bottom:16px;">
+      拍摄视角: ${viewLabel} | 
+      <a href="${API_BASE}/${jobId}/result.json" target="_blank" style="color:#4a7cff;">JSON</a> |
+      <a href="${API_BASE}/${jobId}/log" target="_blank" style="color:#4a7cff;">日志</a>
+    </p>
+    ${viewWarning ? `<div style="background:#2a2000;border:1px solid #5a4a00;border-radius:8px;padding:10px 14px;margin-bottom:16px;color:#ffd54f;font-size:13px;">⚠️ ${viewWarning}</div>` : ''}
+    
+    <div class="result-grid">
+      <div class="result-card" style="grid-column:1/-1;text-align:center;">
+        <div class="label">总分</div>
+        <div class="value ${scoreClass}" style="font-size:48px;">${totalScore}<span style="font-size:18px;color:#606880;">/100</span></div>
+      </div>
+      ${metricsHtml}
+    </div>
+    
+    <div class="media-section">
+      <div class="media-box">
+        <div class="title">标注视频 <span class="badge">MP4</span></div>
+        <video controls src="${API_BASE}/${jobId}/video.mp4" onerror="this.parentElement.innerHTML='<div class=\\'title\\'>标注视频</div><div style=\\'padding:40px;text-align:center;color:#606880;\\'>视频不可用</div>'"></video>
+      </div>
+      <div class="media-box">
+        <div class="title">角度图表 <span class="badge">PNG</span></div>
+        <img src="${API_BASE}/${jobId}/chart.png" onerror="this.parentElement.innerHTML='<div class=\\'title\\'>角度图表</div><div style=\\'padding:40px;text-align:center;color:#606880;\\'>图表不可用</div>'">
+      </div>
+    </div>
+    
+    <div class="log-toggle" onclick="toggleLog(this)">📋 查看分析日志</div>
+    <div class="log-content" id="logContent"></div>
+  `;
+  
+  document.getElementById('resultSection').classList.add('active');
+  document.getElementById('progressSection').classList.remove('active');
+  
+  // Load log
+  fetch(`${API_BASE}/${jobId}/log`)
+    .then(r => r.text())
+    .then(log => document.getElementById('logContent').textContent = log)
+    .catch(() => {});
+  
+  // AI 教练分析
+  const llmBox = document.createElement('div');
+  llmBox.className = 'llm-analysis';
+  llmBox.innerHTML = '<div class="llm-header">🤖 AI 教练点评</div><div class="llm-body"><div class="llm-loading">分析中<span class="dots">...</span></div></div>';
+  document.getElementById('resultSection').appendChild(llmBox);
+  
+  fetch(`/api/analysis/llm-analyze/${jobId}`)
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.analysis) {
+        llmBox.querySelector('.llm-body').innerHTML = '<div class="llm-content">' + renderMarkdown(resp.analysis) + '</div>';
+      } else {
+        llmBox.querySelector('.llm-body').innerHTML = '<div class="llm-error">' + (resp.error || '点评不可用') + '</div>';
+      }
+    })
+    .catch(err => {
+      llmBox.querySelector('.llm-body').innerHTML = '<div class="llm-error">❌ ' + err.message + '</div>';
+    });
+}
+
+function renderMarkdown(text) {
+  if (!text) return '';
+  // Simple markdown rendering
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/### (.+)/g, '<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+}
+
+function toggleLog(el) {
+  const content = el.nextElementSibling;
+  content.classList.toggle('open');
+  el.textContent = content.classList.contains('open') ? '📋 收起日志' : '📋 查看分析日志';
+}
+
+// ════════════════════════════════════════════
+// 历史记录
+// ════════════════════════════════════════════
+let historyOpen = true;
+
+function toggleHistory() {
+  historyOpen = !historyOpen;
+  document.getElementById('historyBody').style.display = historyOpen ? 'block' : 'none';
+  document.querySelector('.history-toggle').classList.toggle('open', historyOpen);
+}
+
+function loadHistory() {
+  const body = document.getElementById('historyBody');
+  fetch('/api/analysis/history?limit=20')
+    .then(r => r.json())
+    .then(data => {
+      const items = data.items || [];
+      if (items.length === 0) {
+        body.innerHTML = '<div class="history-empty">暂无分析记录，上传视频后自动保存</div>';
+        return;
+      }
+      body.innerHTML = items.map(item => {
+        const score = item.total_score || 0;
+        const scoreClass = score >= 80 ? 'score-good' : score >= 50 ? 'score-warn' : 'score-bad';
+        const viewLabel = item.view_type === 'side' ? '侧面' : item.view_type === 'front' ? '正面' : '';
+        const date = new Date(item.created_at);
+        const dateStr = date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+        const timeStr = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        return `
+          <div class="history-item" onclick="loadAnalysis('${item.job_id}')">
+            <span class="h-date">${dateStr} ${timeStr}</span>
+            <span class="h-exercise">${item.exercise_label || item.exercise_name || '未知'}</span>
+            ${viewLabel ? `<span class="h-view">${viewLabel}</span>` : ''}
+            <span class="h-score ${scoreClass}">${score}</span>
+          </div>
+        `;
+      }).join('');
+    })
+    .catch(() => {
+      body.innerHTML = '<div class="history-empty">加载失败</div>';
+    });
+}
+
+function loadAnalysis(jobId) {
+  // Scroll to top and show loading
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  document.getElementById('progressSection').classList.add('active');
+  document.getElementById('progressText').textContent = '正在加载历史分析...';
+  document.getElementById('progressFill').style.width = '50%';
+  
+  fetch(`${API_BASE}/result/${jobId}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'completed') {
+        document.getElementById('progressFill').style.width = '100%';
+        document.getElementById('progressText').textContent = '✅ 加载完成！';
+        setTimeout(() => showResult(jobId, data), 300);
+      } else {
+        throw new Error(data.error || '结果不可用');
+      }
+    })
+    .catch(err => {
+      document.getElementById('progressSection').classList.remove('active');
+      document.getElementById('resultSection').innerHTML =
+        `<div class="error-box">❌ 加载失败: ${err.message}</div>`;
+      document.getElementById('resultSection').classList.add('active');
+    });
+}
+
+// ════════════════════════════════════════════
+// 仪表盘统计
+// ════════════════════════════════════════════
+function loadStats() {
+  fetch('/api/analysis/stats')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.total || data.total === 0) return;
+      const section = document.getElementById('statsSection');
+      section.style.display = 'block';
+      
+      // Score class
+      const avgClass = data.avg_score >= 80 ? 'score-good' : data.avg_score >= 50 ? 'score-warn' : 'score-bad';
+      
+      document.getElementById('statsGrid').innerHTML = `
+        <div class="stats-card">
+          <div class="stat-value">${data.total}</div>
+          <div class="stat-label">总分析次数</div>
+        </div>
+        <div class="stats-card">
+          <div class="stat-value ${avgClass}">${data.avg_score}</div>
+          <div class="stat-label">平均分</div>
+        </div>
+        <div class="stats-card">
+          <div class="stat-value">${data.by_exercise ? data.by_exercise.length : 0}</div>
+          <div class="stat-label">训练动作数</div>
+        </div>
+      `;
+      
+      // Best/Worst
+      if (data.best || data.worst) {
+        document.getElementById('statsBreakdown').innerHTML = `
+          ${data.best ? `
+            <div class="stats-card">
+              <div class="stat-value score-good">${data.best.total_score}</div>
+              <div class="stat-label">最佳成绩</div>
+              <div class="stat-sub">${data.best.exercise_label}</div>
+            </div>
+          ` : ''}
+          ${data.worst ? `
+            <div class="stats-card">
+              <div class="stat-value score-bad">${data.worst.total_score}</div>
+              <div class="stat-label">最差成绩</div>
+              <div class="stat-sub">${data.worst.exercise_label}</div>
+            </div>
+          ` : ''}
+          ${data.by_exercise && data.by_exercise.length > 0 ? `
+            <div class="stats-card">
+              <div class="stat-value">${data.by_exercise[0].exercise_label}</div>
+              <div class="stat-label">最常训练</div>
+              <div class="stat-sub">${data.by_exercise[0].count}次</div>
+            </div>
+          ` : ''}
+        `;
+      }
+    })
+    .catch(() => {});
+}
+
+// Load history on page load
+loadStats();
+loadHistory();
+</script>
+</body>
+</html>
