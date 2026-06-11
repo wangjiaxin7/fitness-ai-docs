@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 健身教练 - 注册</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080a12;--surface:rgba(255,255,255,.06);--card:rgba(255,255,255,.07);
+  --border:rgba(255,255,255,.1);--accent:#0066ff;--accent2:#00d4ff;
+  --text:#f0f4f8;--text2:#b0b8c8;--text3:#8890a0;
+  --radius:12px;--font:'PingFang SC','Microsoft YaHei','Noto Sans SC','SF Pro Text',-apple-system,sans-serif;
+}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  display:flex;justify-content:center;align-items:center;min-height:100vh;
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(0,102,255,.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(0,212,255,.04) 0%, transparent 40%);
+}
+.auth-card{
+  background:rgba(255,255,255,.04);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--border);border-radius:20px;padding:44px 40px 36px;
+  width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.logo-wrap{
+  width:48px;height:48px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;margin:0 auto 16px;color:#000;font-weight:800;
+  box-shadow:0 0 24px rgba(0,102,255,.25);
+}
+h1{font-size:20px;text-align:center;font-weight:700;letter-spacing:-.3px}
+.sub{text-align:center;color:var(--text2);font-size:13px;margin:6px 0 28px}
+.form-group{margin-bottom:18px}
+label{display:block;font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:500;letter-spacing:.4px;text-transform:uppercase}
+input{
+  width:100%;padding:12px 14px;background:rgba(255,255,255,.06);
+  border:1px solid var(--border);border-radius:10px;color:var(--text);
+  font-size:14px;font-weight:500;font-family:var(--font);outline:none;transition:all .2s;
+}
+input:focus{border-color:rgba(0,212,255,.4);box-shadow:0 0 0 3px rgba(0,212,255,.1)}
+input::placeholder{color:var(--text3);font-size:12px}
+.btn{
+  width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;border-radius:10px;color:#000;font-size:14px;font-weight:700;
+  cursor:pointer;transition:all .2s;font-family:var(--font);margin-top:4px;
+  letter-spacing:.3px;
+}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,102,255,.25)}
+.error{
+  background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.2);
+  color:#ff6b7a;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:16px;
+}
+.link{text-align:center;margin-top:24px;font-size:13px;color:var(--text3)}
+.link a{color:var(--accent2);text-decoration:none;font-weight:500}
+.link a:hover{text-decoration:underline}
+.divider{height:1px;background:var(--border);margin:24px 0 0}
+.hint{font-size:11px;color:var(--text3);margin-top:4px}
+</style>
+</head>
+<body>
+<div class="auth-card">
+  <div class="logo-wrap">K</div>
+  <h1>创建账户</h1>
+  <p class="sub">注册后即可使用 AI 健身教练</p>
+  
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+  
+  <form method="post">
+    <div class="form-group">
+      <label for="username">用户名</label>
+      <input type="text" id="username" name="username" placeholder="至少2个字符" required autofocus>
+    </div>
+    <div class="form-group">
+      <label for="display_name">昵称</label>
+      <input type="text" id="display_name" name="display_name" placeholder="显示用的名字">
+    </div>
+    <div class="form-group">
+      <label for="password">密码</label>
+      <input type="password" id="password" name="password" placeholder="至少6个字符" required>
+    </div>
+    <div class="form-group">
+      <label for="confirm">确认密码</label>
+      <input type="password" id="confirm" name="confirm" placeholder="再次输入密码" required>
+    </div>
+    <button type="submit" class="btn">注 册</button>
+  </form>
+  
+  <div class="divider"></div>
+  <p class="link">已有账户？<a href="{{ url_for('login') }}">登录</a></p>
+</div>
+</body>
+</html>

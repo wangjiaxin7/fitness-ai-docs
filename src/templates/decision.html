@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>训练决策 - 小铁</title>
+<style>
+:root {
+  --bg: #0d0f1a;
+  --card: rgba(255,255,255,0.04);
+  --card-border: rgba(255,255,255,0.06);
+  --text: #f0f4f8;
+  --text-dim: #8890a0;
+  --text-muted: #6b7280;
+  --primary: #6c5ce7;
+  --primary-glow: rgba(108,92,231,0.3);
+  --green: #00b894;
+  --green-bg: rgba(0,184,148,0.12);
+  --yellow: #fdcb6e;
+  --yellow-bg: rgba(253,203,110,0.12);
+  --red: #e17055;
+  --red-bg: rgba(225,112,85,0.12);
+  --blue: #74b9ff;
+  --blue-bg: rgba(116,185,255,0.08);
+  --radius: 16px;
+  --radius-sm: 10px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+.nav {
+  display: flex; align-items: center; gap: 20px;
+  padding: 16px 32px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--card-border);
+}
+.nav a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+.nav a:hover { color: var(--text); }
+.nav .title {
+  font-size: 18px; font-weight: 600;
+  background: linear-gradient(135deg, var(--primary), var(--blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.nav .user { margin-left: auto; font-size: 13px; color: var(--text-dim); }
+.container {
+  max-width: 1000px; margin: 0 auto; padding: 32px 20px;
+}
+h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+h1 small { font-size: 14px; font-weight: 400; color: var(--text-dim); margin-left: 12px; }
+.subtitle { color: var(--text-dim); font-size: 14px; margin-bottom: 32px; }
+
+/* Card base */
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(12px);
+}
+.card-title {
+  font-size: 14px; font-weight: 500; color: var(--text-dim);
+  margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+/* Stage indicator */
+.stage-badge {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px; font-weight: 500;
+  margin-bottom: 16px;
+}
+.stage-0 { background: var(--blue-bg); color: var(--blue); }
+.stage-1 { background: var(--yellow-bg); color: var(--yellow); }
+.stage-2 { background: var(--yellow-bg); color: var(--yellow); }
+.stage-3 { background: var(--green-bg); color: var(--green); }
+.stage-label { color: var(--text-dim); font-size: 13px; margin-bottom: 8px; }
+.feedback-count {
+  font-size: 32px; font-weight: 700;
+  background: linear-gradient(135deg, var(--primary), var(--blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+/* Decision card */
+.decision-card { border-left: 3px solid var(--text-muted); }
+.decision-card.adjust { border-left-color: var(--yellow); }
+.decision-card.adjust-high { border-left-color: var(--red); }
+.decision-card.hold { border-left-color: var(--green); }
+.signal-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--card-border);
+}
+.signal-item:last-child { border-bottom: none; }
+.signal-severity {
+  flex-shrink: 0; padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 600;
+}
+.sev-high { background: var(--red-bg); color: var(--red); }
+.sev-medium { background: var(--yellow-bg); color: var(--yellow); }
+.sev-low { background: var(--blue-bg); color: var(--blue); }
+.signal-text { font-size: 13px; line-height: 1.5; color: var(--text-dim); }
+.signal-action { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* History timeline */
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before {
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 0;
+  width: 1px; background: var(--card-border);
+}
+.timeline-item {
+  position: relative; padding: 12px 0 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.timeline-item:last-child { border-bottom: none; }
+.timeline-dot {
+  position: absolute; left: -20px; top: 16px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-muted);
+}
+.timeline-dot.adjust { background: var(--yellow); }
+.timeline-dot.hold { background: var(--green); }
+.timeline-date { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.timeline-action {
+  font-size: 13px; font-weight: 500; margin-bottom: 4px;
+}
+.timeline-reason { font-size: 12px; color: var(--text-dim); }
+
+/* Rules info */
+.rules-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px; margin-top: 12px;
+}
+.rule-category {
+  padding: 10px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--card-border);
+  text-align: center;
+}
+.rule-category .count { font-size: 20px; font-weight: 700; }
+.rule-category .label { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+/* Buttons */
+.btn {
+  display: inline-block; padding: 10px 24px; border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 500; cursor: pointer; border: none;
+  transition: all 0.2s;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), #a29bfe);
+  color: white;
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px var(--primary-glow); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-outline {
+  background: transparent; border: 1px solid var(--card-border); color: var(--text-dim);
+}
+.btn-outline:hover { border-color: var(--text-dim); color: var(--text); }
+
+/* Message display */
+.message-box {
+  background: var(--green-bg);
+  border: 1px solid rgba(0,184,148,0.2);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin: 16px 0;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+.message-box.warn { background: var(--yellow-bg); border-color: rgba(253,203,110,0.2); }
+.message-box.error { background: var(--red-bg); border-color: rgba(225,112,85,0.2); }
+
+/* Loader */
+.loader {
+  display: inline-block; width: 20px; height: 20px;
+  border: 2px solid var(--card-border); border-top-color: var(--primary);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty-state {
+  text-align: center; padding: 40px 20px; color: var(--text-muted);
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <span class="title">🏋️ 小铁</span>
+  <a href="/chat">对话</a>
+  <a href="/decision">训练决策</a>
+  <a href="/data">数据</a>
+  <span class="user">{{ display_name }}</span>
+</div>
+
+<div class="container">
+  <h1>训练决策 <small>Decision Engine</small></h1>
+  <p class="subtitle">基于 70 条规则的训练效果评估与调整建议</p>
+
+  <!-- 状态卡片 -->
+  <div class="card" id="status-card">
+    <div class="card-title">📊 当前训练状态</div>
+    <div id="status-content"><div class="loader"></div></div>
+  </div>
+
+  <!-- 手动评估 -->
+  <div class="card">
+    <div class="card-title">⚡ 触发评估</div>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">
+      手动触发一次完整的训练评估：执行 70 条规则 → 趋势分析 → 生成建议
+    </p>
+    <button class="btn btn-primary" id="btn-evaluate" onclick="triggerEvaluate()">🔄 执行评估</button>
+    <div id="eval-result" style="display:none;"></div>
+  </div>
+
+  <!-- 决策历史 -->
+  <div class="card">
+    <div class="card-title">📜 决策历史</div>
+    <div id="history-content"><div class="loader"></div></div>
+  </div>
+
+  <!-- 规则统计 -->
+  <div class="card">
+    <div class="card-title">📋 规则引擎</div>
+    <div id="rules-content"><div class="loader"></div></div>
+  </div>
+</div>
+
+<script>
+const STAGE_NAMES = {0:'基线采集',1:'基线期',2:'观察期',3:'评估期'};
+
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/decision/status');
+    const data = await r.json();
+    const stage = data.stage || {};
+    const sid = stage.stage_id ?? 0;
+    document.getElementById('status-content').innerHTML = `
+      <div class="stage-badge stage-${sid}">${stage.stage_name || '未知'}</div>
+      <div style="display:flex;gap:40px;flex-wrap:wrap;">
+        <div>
+          <div class="stage-label">已收集反馈</div>
+          <div class="feedback-count">${stage.feedback_count ?? 0}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">/ 8 进入评估期</div>
+        </div>
+        <div style="flex:1;">
+          <div class="stage-label">最新决策</div>
+          ${data.latest_decision ? `
+            <div class="decision-card ${data.latest_decision.decision_action === 'deload'||data.latest_decision.decision_action==='reduce_volume'?'adjust-high':data.latest_decision.decision_action === 'hold'?'hold':'adjust'}" style="padding:12px;border-radius:8px;background:rgba(255,255,255,0.02);">
+              <div style="font-size:13px;font-weight:500;margin-bottom:4px;">
+                ${data.latest_decision.decision_action === 'deload' ? '⚠️ 建议减量' :
+                  data.latest_decision.decision_action === 'hold' ? '✅ 保持现状' :
+                  '🔍 ' + (data.latest_decision.decision_action || '')}
+              </div>
+              <div style="font-size:12px;color:var(--text-dim);">${data.latest_decision.evaluate_date ? new Date(data.latest_decision.evaluate_date).toLocaleString() : ''}</div>
+              <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">来源: ${data.latest_decision.decision_source || '-'}</div>
+            </div>
+          ` : `<div class="empty-state">暂无决策记录</div>`}
+        </div>
+      </div>
+      <div style="margin-top:16px;padding:12px;border-radius:8px;background:rgba(255,255,255,0.02);font-size:12px;color:var(--text-muted);">
+        💡 ${sid >= 3 ? '已进入完整评估阶段，每次训练反馈后自动评估' :
+           sid >= 2 ? '观察阶段：收集更多数据后进入完整评估' :
+           sid >= 1 ? '基线期：请继续训练并提交反馈' :
+           '尚无训练数据，完成首次训练后提交反馈'}
+      </div>
+    `;
+  } catch(e) {
+    document.getElementById('status-content').innerHTML ='<div class="empty-state">无法连接决策引擎</div>';
+  }
+}
+
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/decision/history?limit=20');
+    const data = await r.json();
+    const decisions = data.decisions || [];
+    const html = decisions.length ? decisions.map(d => `
+      <div class="timeline-item">
+        <div class="timeline-dot ${d.decision_action === 'hold' ? 'hold' : 'adjust'}"></div>
+        <div class="timeline-date">${d.evaluate_date ? new Date(d.evaluate_date).toLocaleString() : ''}</div>
+        <div class="timeline-action">${d.decision_action === 'deload' ? '⚠️ 减量建议' :
+          d.decision_action === 'hold' ? '✅ 保持现状' :
+          d.decision_action === 'reduce_volume' ? '📉 减负荷' :
+          d.decision_action === 'check_diet' ? '🍽️ 饮食调整' :
+          d.decision_action === 'force_deload' ? '🚨 强制减量' :
+          d.decision_action === 'collecting_baseline' ? '📊 基线采集' :
+          '🔍 ' + (d.decision_action || '-')}</div>
+        <div class="timeline-reason">${d.user_message ? d.user_message.substring(0,120) + (d.user_message.length>120?'...':'') : '-'}</div>
+        ${d.was_accepted === null ? `
+          <div style="margin-top:6px;display:flex;gap:8px;">
+            <button class="btn btn-sm btn-yes" onclick="feedbackDecision('${d.id}',true)" style="padding:4px 12px;font-size:11px;border-radius:6px;background:var(--green-bg);color:var(--green);border:1px solid rgba(0,184,148,0.2);cursor:pointer;">👍 有用</button>
+            <button class="btn btn-sm btn-no" onclick="feedbackDecision('${d.id}',false)" style="padding:4px 12px;font-size:11px;border-radius:6px;background:var(--red-bg);color:var(--red);border:1px solid rgba(225,112,85,0.2);cursor:pointer;">👎 没用</button>
+          </div>
+        ` : `<div style="margin-top:6px;font-size:11px;color:var(--text-muted);">已反馈: ${d.was_accepted ? '👍 有用' : '👎 没用'}</div>`}
+      </div>
+    `).join('') : '<div class="empty-state">暂无决策历史</div>';
+    document.getElementById('history-content').innerHTML = `<div class="timeline">${html}</div>`;
+  } catch(e) {
+    document.getElementById('history-content').innerHTML = '<div class="empty-state">加载失败</div>';
+  }
+}
+
+async function loadRules() {
+  try {
+    const r = await fetch('/api/decision/rules');
+    const data = await r.json();
+    const rules = data.rules || [];
+    const dims = {};
+    rules.forEach(rule => { dims[rule.dimension] = (dims[rule.dimension] || 0) + 1; });
+    const labels = {training:'训练',diet:'饮食',recovery:'恢复',safety:'安全',status:'状态'};
+    const html = Object.entries(dims).map(([k,v]) => `
+      <div class="rule-category">
+        <div class="count" style="color:${k==='safety'?'var(--red)':k==='status'?'var(--yellow)':'var(--primary)'}">${v}</div>
+        <div class="label">${labels[k]||k}</div>
+      </div>
+    `).join('');
+    document.getElementById('rules-content').innerHTML = `
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">
+        共 <strong style="color:var(--text)">${data.total_rules}</strong> 条规则
+        ${data.version ? '· v' + data.version : ''}
+      </div>
+      <div class="rules-grid">${html}</div>
+    `;
+  } catch(e) {
+    document.getElementById('rules-content').innerHTML = '<div class="empty-state">加载失败</div>';
+  }
+}
+
+async function feedbackDecision(id, accepted) {
+  try {
+    await fetch(`/api/decision/${id}/feedback`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({accepted})
+    });
+    loadHistory();
+  } catch(e) {}
+}
+
+async function triggerEvaluate() {
+  const btn = document.getElementById('btn-evaluate');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loader"></span> 评估中...';
+  const resultDiv = document.getElementById('eval-result');
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div class="loader"></div>';
+  try {
+    const r = await fetch('/api/decision/evaluate', {method:'POST'});
+    const data = await r.json();
+    const msg = data.user_message || data.decision?.summary || '评估完成';
+    const isWarn = data.decision?.action === 'deload' || data.decision?.action === 'force_deload';
+    const isErr = !r.ok || data.error;
+    resultDiv.innerHTML = `<div class="message-box ${isErr?'error':isWarn?'warn':''}">${msg}</div>`;
+    loadStatus();
+    loadHistory();
+  } catch(e) {
+    resultDiv.innerHTML = '<div class="message-box error">评估失败: ' + e.message + '</div>';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '🔄 执行评估';
+}
+
+loadStatus();
+loadHistory();
+loadRules();
+</script>
+
+</body>
+</html>

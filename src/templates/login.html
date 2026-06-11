@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 健身教练 - 登录</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080a12;--border:rgba(255,255,255,.1);--accent:#0066ff;--accent2:#00d4ff;
+  --text:#f0f4f8;--text2:#b0b8c8;--text3:#8890a0;
+  --font:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  display:flex;justify-content:center;align-items:center;min-height:100vh;
+}
+.auth-card{
+  background:rgba(255,255,255,.04);backdrop-filter:blur(20px);
+  border:1px solid var(--border);border-radius:20px;padding:44px 40px 36px;
+  width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.logo-wrap{
+  width:48px;height:48px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;margin:0 auto 16px;color:#000;font-weight:800;
+}
+h1{font-size:20px;text-align:center;font-weight:700}
+.sub{text-align:center;color:var(--text2);font-size:13px;margin:6px 0 28px}
+.form-group{margin-bottom:18px}
+label{display:block;font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:500;text-transform:uppercase}
+input{
+  width:100%;padding:12px 14px;background:rgba(255,255,255,.06);
+  border:1px solid var(--border);border-radius:10px;color:var(--text);
+  font-size:14px;font-family:var(--font);outline:none;
+}
+input:focus{border-color:rgba(0,212,255,.4)}
+.btn{
+  width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;border-radius:10px;color:#000;font-size:14px;font-weight:700;
+  cursor:pointer;font-family:var(--font);margin-top:4px;
+}
+.error{
+  background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.2);
+  color:#ff6b7a;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:16px;
+}
+.success{
+  background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.2);
+  color:#00ff88;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:16px;
+}
+.link{text-align:center;margin-top:24px;font-size:13px;color:var(--text3)}
+.link a{color:var(--accent2);text-decoration:none}
+.divider{height:1px;background:var(--border);margin:24px 0 0}
+</style>
+</head>
+<body>
+<div class="auth-card">
+  <div class="logo-wrap">K</div>
+  <h1>AI 健身教练</h1>
+  <p class="sub">登录你的账户</p>
+  
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+  {% if request.args.get('registered') %}
+  <div class="success">注册成功！请登录</div>
+  {% endif %}
+  
+  <form method="POST" action="/login">
+    <div class="form-group">
+      <label>用户名</label>
+      <input type="text" name="username" placeholder="输入用户名" required>
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input type="password" name="password" placeholder="输入密码" required>
+    </div>
+    <button type="submit" class="btn">登 录</button>
+  </form>
+  
+  <div class="divider"></div>
+  <p class="link">还没有账户？<a href="/register">注册</a></p>
+</div>
+</body>
+</html>

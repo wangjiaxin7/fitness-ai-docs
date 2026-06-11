@@ -182,42 +182,75 @@
 
 ---
 
-## 文件结构
+## 项目结构
 
 ```
-fitness-web/
-├── app.py                 # Flask 主服务（826 行）
-├── rag.py                 # RAG 向量检索模块
-├── Dockerfile             # Web 服务容器配置
-├── .env                   # 环境变量配置
-├── knowledge/             # RAG 知识库（31 篇文档）
-│   ├── 动作详细/           # 各动作技术指南
-│   ├── 动作/               # 动作要点速查
-│   └── *.md               # 训练/营养/恢复知识
-├── templates/             # HTML 模板
-│   ├── login.html
-│   ├── chat.html          # AI 对话界面
-│   └── analysis.html      # 动作分析界面
-└── 问题记录.md             # 开发过程中的问题与解决方案
+fitness-ai-docs/
+├── README.md                    # 本文件
+├── PRD.md                       # 产品需求文档
+├── 竞品分析.md                   # 竞品对比分析
+├── 技术选型决策.md                # Dify vs 自研决策
+├── 数据库设计.md                 # 数据库表结构设计
+├── API设计.md                   # API 接口文档
+│
+├── src/                         # Flask Web 主服务源码
+│   ├── app.py                   # 主服务（826 行）：路由、AI 对话、安全预检、训练记录
+│   ├── rag.py                   # RAG 向量检索：SiliconFlow embedding + 余弦相似度
+│   ├── requirements.txt         # Python 依赖
+│   ├── Dockerfile               # 容器配置（Gunicorn 4 Worker）
+│   ├── .dockerignore
+│   ├── templates/               # HTML 模板
+│   │   ├── login.html           # 登录页
+│   │   ├── register.html        # 注册页
+│   │   ├── chat.html            # AI 对话教练界面
+│   │   ├── analysis.html        # 动作视频分析界面
+│   │   ├── data.html            # 数据浏览界面
+│   │   ├── decision.html        # 决策引擎界面
+│   │   └── feedback.html        # 训练反馈界面
+│   └── knowledge/               # RAG 知识库（31 篇文档）
+│       ├── *.md                 # 训练/营养/恢复/误区知识
+│       ├── 动作详细/             # 各动作完整技术指南
+│       └── 动作/                 # 动作要点速查
+│
+├── motion-analysis/             # 动作分析服务源码
+│   ├── analyze.py               # MediaPipe 姿态估计 + 多维度评分（1855 行）
+│   ├── server.py                # FastAPI 服务
+│   └── Dockerfile               # 容器配置
+│
+├── screenshots/                 # 产品截图
+│   ├── login.png                # 登录页面
+│   ├── chat.png                 # AI 对话页面
+│   ├── chat_conversation.png    # AI 对话（含回复）
+│   ├── analysis.png             # 动作分析页面
+│   └── dashboard.png            # 数据浏览页面
+│
+└── .gitignore
 ```
+
+### 核心代码说明
+
+| 文件 | 行数 | 核心功能 |
+|------|------|---------|
+| `src/app.py` | 826 | Flask 主服务：用户系统、AI 对话（SSE 流式）、安全预检、训练记录 CRUD、RAG 检索集成 |
+| `src/rag.py` | 217 | RAG 向量检索：文档切块 → SiliconFlow BAAI/bge-m3 embedding → 余弦相似度 Top-3 |
+| `motion-analysis/analyze.py` | 1855 | 动作分析引擎：MediaPipe 姿态估计 → 关节角度计算 → 多维度评分 → 教练点评生成 |
+| `motion-analysis/server.py` | - | FastAPI 服务：视频上传接口 → 调用 analyze.py → 返回分析结果 |
 
 ---
 
 ## 演示
 
-> 截图和演示视频待补充
-
 ### 登录页面
 ![登录页面](screenshots/login.png)
 
 ### AI 对话教练
-![AI 对话](screenshots/chat.png)
+![AI 对话](screenshots/chat_conversation.png)
 
 ### 动作视频分析
 ![动作分析](screenshots/analysis.png)
 
-### 训练数据看板
-![数据看板](screenshots/dashboard.png)
+### 训练数据
+![数据](screenshots/dashboard.png)
 
 ---
 
