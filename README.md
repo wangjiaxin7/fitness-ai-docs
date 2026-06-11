@@ -205,13 +205,11 @@ fitness-web/
 
 ## 演示
 
-> 截图和演示视频待补充
-
 ### 登录页面
 ![登录页面](screenshots/login.png)
 
 ### AI 对话教练
-![AI 对话](screenshots/chat.png)
+![AI 对话](screenshots/chat_conversation.png)
 
 ### 动作视频分析
 ![动作分析](screenshots/analysis.png)
