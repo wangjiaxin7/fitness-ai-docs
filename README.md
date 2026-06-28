@@ -187,11 +187,30 @@
 ```
 fitness-ai-docs/
 ├── README.md                    # 本文件
-├── PRD.md                       # 产品需求文档
-├── 竞品分析.md                   # 竞品对比分析
-├── 技术选型决策.md                # Dify vs 自研决策
-├── 数据库设计.md                 # 数据库表结构设计
-├── API设计.md                   # API 接口文档
+├── CHANGELOG.md                 # 迭代记录（完整产品演进）
+│
+├── docs/                        # 产品设计文档
+│   ├── PRD.md                   # 产品需求文档
+│   ├── 竞品分析.md               # 竞品对比分析
+│   ├── 技术选型决策.md            # Dify vs 自研决策
+│   ├── 数据库设计.md             # 数据库表结构设计
+│   ├── API设计.md               # API 接口文档
+│   ├── user-flow.md             # 用户流程图（含6张Mermaid图）
+│   ├── ai-architecture.md       # AI 能力架构（对话/RAG/视频分析/决策引擎）
+│   └── prompt-design.md         # Prompt 与知识库设计思路
+│
+├── assets/                      # 资源文件
+│   └── screenshots/             # 产品截图
+│       ├── login.png
+│       ├── chat.png
+│       ├── chat_conversation.png
+│       ├── analysis.png
+│       └── dashboard.png
+│
+├── data/                        # 测试数据
+│   ├── README.md                # 测试数据说明
+│   ├── mock-conversations.json  # 5 组模拟 AI 对话样例
+│   └── sample-training.sql      # 模拟用户 2 周训练数据
 │
 ├── src/                         # Flask Web 主服务源码
 │   ├── app.py                   # 主服务（826 行）：路由、AI 对话、安全预检、训练记录
@@ -212,19 +231,10 @@ fitness-ai-docs/
 │       ├── 动作详细/             # 各动作完整技术指南
 │       └── 动作/                 # 动作要点速查
 │
-├── motion-analysis/             # 动作分析服务源码
-│   ├── analyze.py               # MediaPipe 姿态估计 + 多维度评分（1855 行）
-│   ├── server.py                # FastAPI 服务
-│   └── Dockerfile               # 容器配置
-│
-├── screenshots/                 # 产品截图
-│   ├── login.png                # 登录页面
-│   ├── chat.png                 # AI 对话页面
-│   ├── chat_conversation.png    # AI 对话（含回复）
-│   ├── analysis.png             # 动作分析页面
-│   └── dashboard.png            # 数据浏览页面
-│
-└── .gitignore
+└── motion-analysis/             # 动作分析服务源码
+    ├── analyze.py               # MediaPipe 姿态估计 + 多维度评分（1855 行）
+    ├── server.py                # FastAPI 服务
+    └── Dockerfile               # 容器配置
 ```
 
 ### 核心代码说明
@@ -241,23 +251,30 @@ fitness-ai-docs/
 ## 演示
 
 ### 登录页面
-![登录页面](screenshots/login.png)
+![登录页面](assets/screenshots/login.png)
 
 ### AI 对话教练
-![AI 对话](screenshots/chat_conversation.png)
+![AI 对话](assets/screenshots/chat_conversation.png)
 
 ### 动作视频分析
-![动作分析](screenshots/analysis.png)
+![动作分析](assets/screenshots/analysis.png)
 
 ### 训练数据
-![数据](screenshots/dashboard.png)
+![数据](assets/screenshots/dashboard.png)
 
 ---
 
 ## 相关文档
 
-- [产品需求文档（PRD）](PRD.md)
-- [竞品分析](竞品分析.md)
-- [技术选型决策](技术选型决策.md)
-- [数据库设计](数据库设计.md)
-- [API 设计](API设计.md)
+| 文档 | 说明 |
+|------|------|
+| [产品需求文档（PRD）](docs/PRD.md) | 产品定位、功能需求、用户故事、里程碑 |
+| [用户流程图](docs/user-flow.md) | 6 张 Mermaid 流程图：注册/对话/视频分析/决策引擎/边界场景 |
+| [AI 能力架构](docs/ai-architecture.md) | 对话/RAG/视频分析/决策引擎四大模块的架构设计与设计决策 |
+| [Prompt 与知识库设计](docs/prompt-design.md) | 模块化策略、四层上下文、安全设计、Token 优化 |
+| [竞品分析](docs/竞品分析.md) | 竞品对比分析 |
+| [技术选型决策](docs/技术选型决策.md) | Dify vs 自研决策 |
+| [数据库设计](docs/数据库设计.md) | 数据库表结构设计 |
+| [API 设计](docs/API设计.md) | API 接口文档 |
+| [迭代记录](CHANGELOG.md) | 完整产品演进过程 |
+| [测试数据](data/) | 模拟对话 + 示例训练 SQL |
