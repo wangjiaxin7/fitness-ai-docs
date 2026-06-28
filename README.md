@@ -213,38 +213,47 @@ fitness-ai-docs/
 │   └── sample-training.sql      # 模拟用户 2 周训练数据
 │
 ├── src/                         # Flask Web 主服务源码
-│   ├── app.py                   # 主服务（826 行）：路由、AI 对话、安全预检、训练记录
-│   ├── rag.py                   # RAG 向量检索：SiliconFlow embedding + 余弦相似度
+│   ├── app.py                   # 主服务：路由、AI 对话、安全预检、训练记录
+│   ├── rag.py                   # RAG 向量检索
+│   ├── prompts/                 # 模块化提示词（base/training/diet）
 │   ├── requirements.txt         # Python 依赖
 │   ├── Dockerfile               # 容器配置（Gunicorn 4 Worker）
 │   ├── .dockerignore
 │   ├── templates/               # HTML 模板
-│   │   ├── login.html           # 登录页
-│   │   ├── register.html        # 注册页
-│   │   ├── chat.html            # AI 对话教练界面
-│   │   ├── analysis.html        # 动作视频分析界面
-│   │   ├── data.html            # 数据浏览界面
-│   │   ├── decision.html        # 决策引擎界面
-│   │   └── feedback.html        # 训练反馈界面
+│   │   ├── login.html / register.html / chat.html
+│   │   ├── analysis.html / data.html
+│   │   ├── decision.html / feedback.html
+│   │   └── 404.html / 500.html
 │   └── knowledge/               # RAG 知识库（31 篇文档）
-│       ├── *.md                 # 训练/营养/恢复/误区知识
+│       ├── 训练/营养/恢复/误区等
 │       ├── 动作详细/             # 各动作完整技术指南
 │       └── 动作/                 # 动作要点速查
 │
-└── motion-analysis/             # 动作分析服务源码
-    ├── analyze.py               # MediaPipe 姿态估计 + 多维度评分（1855 行）
-    ├── server.py                # FastAPI 服务
-    └── Dockerfile               # 容器配置
+├── memory-service/              # 对话记忆服务 ✨
+│   ├── main.py                  # Flask 记忆接口
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── motion-analysis/             # 动作分析服务
+│   ├── analyze.py               # MediaPipe 姿态估计 + 多维度评分
+│   ├── server.py                # FastAPI 服务
+│   └── Dockerfile
+│
+├── docker-compose.yml           # 5 容器编排 ✨
+├── nginx.conf                   # Nginx 反向代理配置 ✨
+└── backup.sh                    # PostgreSQL 自动备份脚本 ✨
 ```
 
 ### 核心代码说明
 
 | 文件 | 行数 | 核心功能 |
 |------|------|---------|
-| `src/app.py` | 826 | Flask 主服务：用户系统、AI 对话（SSE 流式）、安全预检、训练记录 CRUD、RAG 检索集成 |
-| `src/rag.py` | 217 | RAG 向量检索：文档切块 → SiliconFlow BAAI/bge-m3 embedding → 余弦相似度 Top-3 |
-| `motion-analysis/analyze.py` | 1855 | 动作分析引擎：MediaPipe 姿态估计 → 关节角度计算 → 多维度评分 → 教练点评生成 |
+| `src/app.py` | - | Flask 主服务：用户系统、AI 对话（SSE 流式）、安全预检、训练记录 CRUD、RAG 检索集成 |
+| `src/rag.py` | - | RAG 向量检索：文档切块 → SiliconFlow BAAI/bge-m3 embedding → 余弦相似度 Top-3 |
+| `motion-analysis/analyze.py` | - | 动作分析引擎：MediaPipe 姿态估计 → 关节角度计算 → 多维度评分 → 教练点评生成 |
 | `motion-analysis/server.py` | - | FastAPI 服务：视频上传接口 → 调用 analyze.py → 返回分析结果 |
+| `memory-service/main.py` | - | 对话记忆管理：保存/检索对话历史 |
+| `docker-compose.yml` | - | 5 容器编排：PostgreSQL + Web + Memory + Motion + Nginx |
 
 ---
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 动作分析框架: 多种训练动作的 MediaPipe Pose 分析与评分
-支持: 深蹲 / 杠铃卧推 / 上斜哑铃卧推 / 引体向上 / 高位下拉 / 通用胸背肩 / 哑铃飞鸟 / 二头弯举 / 腿举
+支持: 深蹲 / 杠铃卧推 / 上斜哑铃卧推 / 引体向上 / 高位下拉 / 通用胸背肩 / 哑铃飞鸟 / 二头弯举 / 腿举 / 罗马尼亚硬拉
 
 用法:
   python3 analyze.py <视频路径> [动作名称]
@@ -10,7 +10,7 @@
 
 动作名称(不指定则自动检测):
   squat, bench-press, incline-db-press, pull-up, lat-pulldown,
-  dumbbell-fly, bicep-curl, leg-press
+  dumbbell-fly, bicep-curl, leg-press, romanian-deadlift
 """
 
 import cv2
@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import json, math, sys, os, urllib.request
 
-MODEL_PATH = os.environ.get("POSE_MODEL", "/tmp/pose_landmarker.task")
+MODEL_PATH = os.environ.get("POSE_MODEL", "/data/pose_landmarker.task")
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", os.getcwd())
 
 # ─── MediaPipe 关键点索引 ─────────────────────────────
@@ -570,6 +570,59 @@ def squat():
                      filter_none(get_col(seq, "hip")) else 0
              }},
         ]
+    )
+
+# ─── 罗马尼亚硬拉 Romanian Deadlift ──────────────────
+@register
+def romanian_deadlift():
+    return ExerciseDef(
+        name="romanian-deadlift",
+        label="罗马尼亚硬拉 RDL",
+        landmarks_needed=[L_HIP, L_KNEE, L_ANKLE, L_SHOULDER, R_SHOULDER, R_HIP, R_KNEE, R_ANKLE],
+        angle_configs=[
+            {"name": "knee", "type": "left_right",
+             "a": L_HIP, "b": L_KNEE, "c": L_ANKLE,
+             "d": R_HIP, "e": R_KNEE, "f": R_ANKLE},
+            {"name": "hip", "type": "left_right",
+             "a": L_SHOULDER, "b": L_HIP, "c": L_KNEE,
+             "d": R_SHOULDER, "e": R_HIP, "f": R_KNEE},
+            {"name": "back", "type": "vertical_angle",
+             "a": L_SHOULDER, "b": L_HIP},
+        ],
+        score_rules=[
+            {"name": "髋铰链幅度", "weight": 35,
+             "fn": lambda seq: {
+                 "score": angle_to_score(
+                     (max(filter_none(get_col(seq, "hip")) or [0]) -
+                      min(filter_none(get_col(seq, "hip")) or [180])),
+                     50, 70, 20, 90, 0),
+                 "髋角变化": round(
+                     (max(filter_none(get_col(seq, "hip")) or [0]) -
+                      min(filter_none(get_col(seq, "hip")) or [180])), 1)
+             }},
+            {"name": "膝盖稳定", "weight": 25,
+             "fn": lambda seq: {
+                 "score": max(0, 25 - max(0,
+                     (max(filter_none(get_col(seq, "knee")) or [0]) -
+                      min(filter_none(get_col(seq, "knee")) or [180])) - 15) * 1.5),
+                 "膝角变化": round(
+                     (max(filter_none(get_col(seq, "knee")) or [0]) -
+                      min(filter_none(get_col(seq, "knee")) or [180])), 1)
+             }},
+            {"name": "背部平直", "weight": 25,
+             "fn": lambda seq: {
+                 "score": max(0, 25 - max(0,
+                     (max(filter_none(get_col(seq, "back")) or [0]) -
+                      min(filter_none(get_col(seq, "back")) or [180])) - 15) * 1.2),
+                 "背角范围": round(
+                     (max(filter_none(get_col(seq, "back")) or [0]) -
+                      min(filter_none(get_col(seq, "back")) or [180])), 1)
+             }},
+            {"name": "对称性", "weight": 15,
+             "fn": lambda seq: _symmetry_score(seq, weight=15, col="hip", mult=2)},
+        ],
+        recommended_view="side",
+        view_warning="侧面拍摄才能准确检测髋铰链角度"
     )
 
 # ─── 杠铃卧推 Bench Press ────────────────────────────
@@ -1140,7 +1193,12 @@ def detect_exercise(angle_sequence, prefer=None, frame_count=0):
         if avg_tilt > 20:
             return EXERCISES["leg-press"]
         return EXERCISES["squat"]
-    
+
+    # 罗马尼亚硬拉: 膝盖稳定(knee_range小) + 躯干明显前倾(tilt range大)
+    tilt_range = (max(tilts) - min(tilts)) if len(tilts) > 1 else 0
+    if tilt_range > 25 and knee_range <= 40:
+        return EXERCISES["romanian-deadlift"]
+
     # 上肢动作（站姿）
     avg_elbow_l = sum(elbows_l) / len(elbows_l) if elbows_l else 0
     avg_elbow_r = sum(elbows_r) / len(elbows_r) if elbows_r else 0

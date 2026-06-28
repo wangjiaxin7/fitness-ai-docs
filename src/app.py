@@ -1,7 +1,20 @@
-import re, os, hashlib, secrets, json, uuid
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+import re, os, hashlib, secrets, json, uuid, logging
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory
 import psycopg2, psycopg2.extras
+import psycopg2.pool
 import requests as http_requests
+import bcrypt
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # 加载 .env 文件（不依赖 python-dotenv）
 _env_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -14,15 +27,71 @@ if os.path.exists(_env_path):
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or "a3f8c2e1d9b7a5f0c4e6d2b8a1f3e5c7d9b2a4f6e8c0d1b3a5f7e9c2d4b6a8f0"
-# Compress(app)  — 关闭，因为会阻塞流式 SSE 响应
+
+# Rate limiting（防暴力破解）
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per minute"],
+    storage_uri="memory://",
+)
 
 # 全局 HTTP 会话（复用连接池）
 _http_session = http_requests.Session()
 _http_session.headers.update({"Connection": "keep-alive"})
 
+# Prompt 加载函数
+PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "prompts")
+
+def load_prompt(name):
+    """加载 prompts/ 目录下的 prompt 文件"""
+    path = os.path.join(PROMPTS_DIR, f"{name}.txt")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+def detect_intent(query):
+    """简单意图检测：训练、饮食、通用"""
+    q = query.lower()
+    training_kw = ["训练", "计划", "增肌", "减脂", "健身", "练", "组", "次", "深蹲", "卧推", "硬拉", "弯举", "推举", "分化", "休息日", "热身", "拉伸", "肌肉", "力量", "耐力", "有氧"]
+    diet_kw = ["吃", "饮食", "营养", "热量", "蛋白质", "碳水", "脂肪", "餐", "食谱", "食物", "喝", "补剂", "蛋白粉", "肌酸", "体重", "增重", "减重"]
+    if any(kw in q for kw in training_kw):
+        return "training"
+    if any(kw in q for kw in diet_kw):
+        return "diet"
+    return "general"
+
 def http():
     """返回全局复用的 requests Session"""
     return _http_session
+
+# 连接池（避免每次请求都新建连接）
+_pool = None
+def get_db():
+    global _pool
+    if _pool is None:
+        _pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=2, maxconn=10, **DB_CONFIG
+        )
+    conn = _pool.getconn()
+    conn.autocommit = True
+    return conn
+
+def put_db(conn):
+    global _pool
+    if _pool:
+        _pool.putconn(conn)
+
+# 敏感词过滤（注册时使用）
+SENSITIVE_WORDS = [
+    "爹", "妈逼", "草泥", "操你", "傻逼", "狗逼", "贱", "煞笔",
+    "sb", "nmsl", "fuck", "shit", "bitch",
+]
+
+def contains_sensitive_word(text: str) -> bool:
+    text_lower = text.lower()
+    return any(w in text_lower for w in SENSITIVE_WORDS)
 
 # DeepSeek API 配置
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
@@ -47,44 +116,60 @@ DB_CONFIG = {
     "dbname": os.getenv("DB_NAME", "dify"),
 }
 
-def get_db():
-    conn = psycopg2.connect(**DB_CONFIG)
-    conn.autocommit = True
-    return conn
+# get_db 已移到上方（使用连接池）
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    return salt + ":" + hashlib.sha256((salt + password).encode()).hexdigest()
+    """使用 bcrypt 哈希密码（自动加盐，故意设计慢以防止暴力破解）"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(password: str, hashed: str) -> bool:
-    salt, h = hashed.split(":", 1)
-    return h == hashlib.sha256((salt + password).encode()).hexdigest()
+    """验证密码，兼容旧的 SHA256 格式"""
+    if hashed.startswith('$2b$') or hashed.startswith('$2a$'):
+        # bcrypt 格式
+        return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    elif ':' in hashed:
+        # 旧的 SHA256 格式（兼容迁移期）
+        salt, h = hashed.split(":", 1)
+        return h == hashlib.sha256((salt + password).encode()).hexdigest()
+    return False
 
 
-# 每次请求刷新 session 中的用户信息（跳过静态资源和非必要路由）
+# 缓存 is_admin 查询（避免每次请求都查数据库）
+_admin_cache = {}  # {user_id: (is_admin, timestamp)}
+_ADMIN_CACHE_TTL = timedelta(minutes=5)
+
 @app.before_request
 def refresh_session_user():
-    if "user_id" in session:
-        # 跳过不需要 is_admin 刷新的路由
-        path = request.path
-        if path.startswith(("/static/", "/api/workouts", "/api/conversations",
-                            "/api/profile", "/api/memory")):
+    if "user_id" not in session:
+        return
+    path = request.path
+    if path.startswith(("/static/", "/favicon.ico")):
+        return
+    user_id = session["user_id"]
+    now = datetime.now()
+    # 检查缓存
+    if user_id in _admin_cache:
+        is_admin, ts = _admin_cache[user_id]
+        if now - ts < _ADMIN_CACHE_TTL:
+            session["is_admin"] = is_admin
             return
-        conn = get_db()
-        try:
-            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute("SELECT is_admin FROM web_users WHERE id = %s::uuid", (session["user_id"],))
-            row = cur.fetchone()
-            cur.close()
-            if row:
-                session["is_admin"] = row["is_admin"]
-            else:
-                # 用户被删了
-                session.clear()
-        except Exception:
-            pass
-        finally:
-            conn.close()
+    # 缓存过期，查数据库
+    conn = get_db()
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT is_admin FROM web_users WHERE id = %s::uuid", (user_id,))
+        row = cur.fetchone()
+        cur.close()
+        if row:
+            session["is_admin"] = row["is_admin"]
+            _admin_cache[user_id] = (row["is_admin"], now)
+        else:
+            session.clear()
+            _admin_cache.pop(user_id, None)
+    except Exception as e:
+        logger.warning(f"刷新 session 失败: {e}")
+    finally:
+        put_db(conn)
 
 
 def admin_required(f):
@@ -102,13 +187,19 @@ def search_knowledge(query, top_k=3):
     """从知识库检索相关文档（embedding 向量检索）"""
     try:
         from rag import search as rag_search
-        return rag_search(query, top_k=top_k)
+        results = rag_search(query, top_k=top_k)
+        # 返回格式: [{"text": ..., "title": ..., "source": ...}]
+        return results
     except Exception as e:
-        print(f"RAG 检索失败: {e}")
+        logger.warning(f"RAG 检索失败: {e}")
         return []
 
 
 # ─── 页面路由 ─────────────────────────────
+
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, "static"), "favicon.ico", mimetype="image/x-icon")
 
 @app.route("/")
 def index():
@@ -117,6 +208,7 @@ def index():
     return redirect(url_for("login"))
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")  # 防暴力破解
 def login():
     if request.method == "GET":
         return render_template("login.html")
@@ -136,20 +228,36 @@ def login():
             session["username"] = user["username"]
             session["display_name"] = user["display_name"] or user["username"]
             session["is_admin"] = user.get("is_admin", False)
+            # 更新密码哈希为 bcrypt（如果还是旧格式）
+            if ':' in user["password_hash"] and not user["password_hash"].startswith('$2'):
+                try:
+                    cu = conn.cursor()
+                    new_hash = hash_password(password)
+                    cu.execute("UPDATE web_users SET password_hash = %s WHERE id = %s::uuid", (new_hash, user["id"]))
+                    cu.close()
+                    logger.info(f"用户 {username} 密码哈希已升级为 bcrypt")
+                except Exception as e:
+                    logger.warning(f"密码哈希升级失败: {e}")
             # 记录登录时间
             try:
                 cu = conn.cursor()
                 cu.execute("UPDATE web_users SET last_login = NOW() WHERE id = %s::uuid", (user["id"],))
                 cu.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"更新登录时间失败: {e}")
+            logger.info(f"用户登录: {username}")
             return redirect(url_for("chat"))
         
+        logger.warning(f"登录失败（密码错误）: {username}")
         return render_template("login.html", error="用户名或密码错误")
+    except Exception as e:
+        logger.error(f"登录异常: {e}")
+        return render_template("login.html", error="登录失败，请稍后重试")
     finally:
-        conn.close()
+        put_db(conn)
 
 @app.route("/register", methods=["GET", "POST"])
+@limiter.limit("5 per minute")  # 防刷注册
 def register():
     if request.method == "GET":
         return render_template("register.html")
@@ -163,10 +271,12 @@ def register():
         return render_template("register.html", error="用户名和密码不能为空")
     if len(username) < 2:
         return render_template("register.html", error="用户名至少2个字符")
-    if len(password) < 6:
-        return render_template("register.html", error="密码至少6个字符")
+    if len(password) < 8:
+        return render_template("register.html", error="密码至少8个字符")
     if password != confirm:
         return render_template("register.html", error="两次密码不一致")
+    if contains_sensitive_word(username) or contains_sensitive_word(display_name):
+        return render_template("register.html", error="用户名或昵称包含敏感词")
     
     conn = get_db()
     try:
@@ -183,9 +293,13 @@ def register():
             (username, hash_password(password), display_name)
         )
         cur.close()
+        logger.info(f"新用户注册: {username}")
         return redirect(url_for("login", registered="1"))
+    except Exception as e:
+        logger.error(f"注册失败: {e}")
+        return render_template("register.html", error="注册失败，请稍后重试")
     finally:
-        conn.close()
+        put_db(conn)
 
 @app.route("/logout")
 def logout():
@@ -228,34 +342,41 @@ def api_chat():
             if profile_data.get("exists") and profile_data.get("profile"):
                 p = profile_data["profile"]
                 parts = []
-                if p.get("name"): parts.append(f"姓名: {p['name']}")
-                if p.get("height"): parts.append(f"身高: {p['height']}cm")
-                if p.get("weight"): parts.append(f"体重: {p['weight']}kg")
-                if p.get("age"): parts.append(f"年龄: {p['age']}岁")
-                if p.get("goal"): parts.append(f"目标: {p['goal']}")
-                if p.get("experience"): parts.append(f"经验: {p['experience']}")
-                if p.get("equipment"): parts.append(f"器材: {p['equipment']}")
+                if p.get("name"): parts.append(f"我是{p['name']}")
+                if p.get("height"): parts.append(f"身高{p['height']}cm")
+                if p.get("weight"): parts.append(f"体重{p['weight']}kg")
+                if p.get("age"): parts.append(f"年龄{p['age']}岁")
+                if p.get("goal"): parts.append(f"目标是{p['goal']}")
+                if p.get("experience"): parts.append(f"训练经验{p['experience']}")
+                if p.get("equipment"): parts.append(f"器材有{p['equipment']}")
                 if parts:
-                    ctx = " | ".join(parts)
-                    ctx = ctx.replace("姓名: ", "我是 ").replace("身高: ", "身高")
-                    ctx = ctx.replace("体重: ", "体重").replace("年龄: ", "年龄")
-                    ctx = ctx.replace("目标: ", "目标是").replace("经验: ", "训练经验")
-                    ctx = ctx.replace("器材: ", "器材有")
-                    ctx = ctx.replace(" | ", "，")
-                    # 去掉"我是 "中多余空格
-                    ctx = ctx.replace("我是 ", "我是").replace("我是", "我是")
-                    if not ctx.endswith("。"):
-                        ctx += "。"
-                    profile_context = ctx + "\n"
-    except Exception:
-        pass
-
+                    profile_context = "，".join(parts) + "。\n"
+    except Exception as e:
+        logger.warning(f"加载用户档案失败: {e}")
     # profile 拼到 query 前缀（让 LLM 看到档案信息）
     user_message = query
     if profile_context:
         user_message = profile_context + query
     
     
+    # 如果没有 conversation_id，创建新对话
+    if not conversation_id:
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            title = query[:20] + ("..." if len(query) > 20 else "")
+            cur.execute(
+                "INSERT INTO conversations (user_id, title) VALUES (%s::uuid, %s) RETURNING id",
+                (user_id, title)
+            )
+            conversation_id = str(cur.fetchone()[0])
+            cur.close()
+        except Exception as e:
+            logger.error(f"创建对话失败: {e}")
+            conversation_id = ""
+        finally:
+            put_db(conn)
+
     # 安全预检：检测到伤病关键词时，直接提示就医，不调 LLM
     injury_keywords = [
         "受伤", "疼痛", "疼", "痛", "扭伤", "拉伤", "撕裂", "骨折",
@@ -285,30 +406,51 @@ def api_chat():
                 ]},
                 timeout=5,
             )
-        except Exception:
-            pass
-        return jsonify({"answer": injury_response, "conversation_id": ""})
+        except Exception as e:
+            logger.warning(f"保存伤病对话记忆失败: {e}")
+        # 保存到 messages 表
+        if conversation_id:
+            conn = get_db()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "INSERT INTO messages (conversation_id, role, content) VALUES (%s::uuid, %s, %s)",
+                    (conversation_id, "user", query)
+                )
+                cur.execute(
+                    "INSERT INTO messages (conversation_id, role, content) VALUES (%s::uuid, %s, %s)",
+                    (conversation_id, "assistant", injury_response)
+                )
+                cur.close()
+            except Exception as e:
+                logger.error(f"保存伤病消息失败: {e}")
+            finally:
+                put_db(conn)
+        return jsonify({"answer": injury_response, "conversation_id": conversation_id})
 
     # 知识库检索
     knowledge_docs = search_knowledge(query)
     
-    # 构建系统提示词
+    # 构建系统提示词（知识库内容作为上下文注入，不暴露内部标签）
     knowledge_section = ""
     if knowledge_docs:
-        knowledge_section = "\n\n【参考资料】\n" + "\n---\n".join(knowledge_docs[:3])
+        parts = []
+        for doc in knowledge_docs[:3]:
+            parts.append(doc['text'])
+        knowledge_section = "\n\n以下是相关知识内容：\n" + "\n---\n".join(parts)
     
-    system_prompt = f"""你是健身教练mimo。你的任务是根据用户的身体数据、目标和训练经验，给出专业的训练和饮食建议。{knowledge_section}
 
-【规则】
-1. 用户的信息会在消息开头以自然语言提供，请直接使用这些信息，无需重复询问
-2. 生成训练计划时包含：动作名称、组数、次数、重量建议
-3. 参考【参考资料】中的知识来回答，但不要直接说"根据参考资料"
-4. 回答简洁、专业、实用
-5. 不要使用<think>标签，直接输出回答
-6. 【安全红线】如果用户提到任何身体疼痛、受伤、不适、关节问题、肌肉拉伤等医疗相关问题，必须第一时间建议就医，绝对不能给出训练方案或自我治疗方法。你是健身教练，不是医生。"""
+    # 根据意图加载对应prompt
+    intent = detect_intent(query)
+    base_prompt = load_prompt("base")
+    if intent == "training":
+        extra_prompt = load_prompt("training")
+    elif intent == "diet":
+        extra_prompt = load_prompt("diet")
+    else:
+        extra_prompt = ""
 
-    # 拼消息
-    user_message = f"{profile_context}{query}" if profile_context else query
+    system_prompt = f"{base_prompt}\n\n{extra_prompt}\n\n{knowledge_section}"
     
     # 获取对话历史（注入记忆）
     history_messages = []
@@ -322,8 +464,8 @@ def api_chat():
                     "role": msg["role"],
                     "content": msg["content"],
                 })
-    except Exception:
-        pass  # 记忆不可用不影响主流程
+    except Exception as e:
+        logger.warning(f"加载对话历史记忆失败: {e}")
     
     # 构建 messages 数组：system + history + current
     messages = [{"role": "system", "content": system_prompt}]
@@ -363,13 +505,32 @@ def api_chat():
                 ]},
                 timeout=5,
             )
-        except Exception:
-            pass  # 存记忆失败不影响返回
-        
+        except Exception as e:
+            logger.warning(f"保存对话记忆失败: {e}")
+
+        # 保存到 messages 表
+        if conversation_id:
+            conn = get_db()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "INSERT INTO messages (conversation_id, role, content) VALUES (%s::uuid, %s, %s)",
+                    (conversation_id, "user", query)
+                )
+                cur.execute(
+                    "INSERT INTO messages (conversation_id, role, content) VALUES (%s::uuid, %s, %s)",
+                    (conversation_id, "assistant", answer)
+                )
+                cur.close()
+            except Exception as e:
+                logger.error(f"保存消息失败: {e}")
+            finally:
+                put_db(conn)
+
     except Exception as e:
         return jsonify({"error": f"AI 请求失败: {str(e)}"}), 502
-    
-    return jsonify({"answer": answer, "conversation_id": ""})
+
+    return jsonify({"answer": answer, "conversation_id": conversation_id})
 
 # ─── 训练记录 ────────────────────────────
 
@@ -471,18 +632,64 @@ def strip_think(text):
 
 @app.route("/api/conversations")
 def api_conversations():
-    """获取当前用户的对话列表（已迁移到 memory-service）"""
+    """获取当前用户的对话列表"""
     if "user_id" not in session:
         return jsonify({"error": "未登录"}), 401
-    return jsonify({"conversations": []})
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(
+            "SELECT id, title as name, EXTRACT(EPOCH FROM created_at) as created_at FROM conversations WHERE user_id = %s::uuid ORDER BY created_at DESC",
+            (session["user_id"],)
+        )
+        rows = cur.fetchall()
+        cur.close()
+        return jsonify({"data": rows})
+    except Exception as e:
+        logger.error(f"获取对话列表失败: {e}")
+        return jsonify({"data": [], "error": str(e)})
+    finally:
+        put_db(conn)
 
 
 @app.route("/api/conversations/<conversation_id>/messages")
 def api_conversation_messages(conversation_id):
-    """获取某个对话的消息列表（已迁移到 memory-service）"""
+    """获取某个对话的消息列表"""
     if "user_id" not in session:
         return jsonify({"error": "未登录"}), 401
-    return jsonify({"messages": []})
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        # 验证对话属于当前用户
+        cur.execute(
+            "SELECT id FROM conversations WHERE id = %s::uuid AND user_id = %s::uuid",
+            (conversation_id, session["user_id"])
+        )
+        if not cur.fetchone():
+            cur.close()
+            return jsonify({"data": [], "error": "对话不存在"})
+        # 获取消息，按时间排序
+        cur.execute(
+            "SELECT role, content FROM messages WHERE conversation_id = %s::uuid ORDER BY created_at",
+            (conversation_id,)
+        )
+        rows = cur.fetchall()
+        cur.close()
+        # 配对：user + assistant -> {query, answer}
+        result = []
+        pending_query = None
+        for msg in rows:
+            if msg["role"] == "user":
+                pending_query = msg["content"]
+            elif msg["role"] == "assistant" and pending_query is not None:
+                result.append({"query": pending_query, "answer": msg["content"]})
+                pending_query = None
+        # 如果最后一条是用户消息还没回复
+        if pending_query is not None:
+            result.append({"query": pending_query, "answer": ""})
+        return jsonify({"data": result})
+    except Exception as e:
+        return jsonify({"data": [], "error": str(e)})
 
 
 # ─── 数据浏览页面 ───────────────────────
@@ -502,7 +709,7 @@ def data_query():
     table = request.json.get("table", "").strip()
     allowed = {
         "web_users", "user_profiles", "workout_logs", "body_measurements",
-        "workouts", "apps", "conversations", "messages", "accounts", "api_tokens", "tenants",
+        "conversations", "messages", "conversation_memory", "analysis_logs",
     }
     if table not in allowed:
         return jsonify({"error": "不允许查看该表"}), 400
@@ -514,26 +721,33 @@ def data_query():
     conn = get_db()
     try:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(f"SELECT count(*) AS cnt FROM {table}")
+        # 使用 psycopg2.sql 防止 SQL 注入
+        from psycopg2 import sql
+        cur.execute(sql.SQL("SELECT count(*) AS cnt FROM {}").format(sql.Identifier(table)))
         total = cur.fetchone()["cnt"]
-        cur.execute(f"SELECT * FROM {table} ORDER BY created_at DESC NULLS LAST LIMIT %s OFFSET %s", (page_size, offset))
+        cur.execute(
+            sql.SQL("SELECT * FROM {} ORDER BY created_at DESC NULLS LAST LIMIT %s OFFSET %s").format(sql.Identifier(table)),
+            (page_size, offset)
+        )
         rows = cur.fetchall()
         cur.close()
-        # 把 datetime/date 转成字符串
+        # 把 datetime/date 转成 ISO 格式字符串（带 Z 表示 UTC）
         result = []
         for r in rows:
             item = {}
             for k, v in dict(r).items():
                 if hasattr(v, 'isoformat'):
-                    item[k] = str(v)
+                    # 加 Z 后缀，让前端知道这是 UTC 时间
+                    item[k] = v.isoformat() + 'Z'
                 else:
                     item[k] = v
             result.append(item)
         return jsonify({"rows": result, "total": len(result), "total_all": total, "page": page, "page_size": page_size})
     except Exception as e:
+        logger.error(f"数据查询失败: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        put_db(conn)
 
 @app.route("/api/data/tables")
 @admin_required
@@ -551,8 +765,11 @@ def data_tables():
         tables = [r[0] for r in cur.fetchall()]
         cur.close()
         return jsonify({"tables": tables})
+    except Exception as e:
+        logger.error(f"获取表列表失败: {e}")
+        return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        put_db(conn)
 
 
 # ─── 检查连接 ───────────────────────────
@@ -579,7 +796,8 @@ def api_analysis_exercises():
     try:
         resp = http_requests.get(f"{MOTION_ANALYSIS_URL}/api/exercises", timeout=5)
         return jsonify(resp.json())
-    except Exception:
+    except Exception as e:
+        logger.warning(f"获取动作列表失败: {e}")
         return jsonify({"exercises": []})
 
 @app.route("/api/analysis/analyze", methods=["POST"])
@@ -604,6 +822,7 @@ def api_analysis_upload():
         )
         return jsonify(resp.json())
     except Exception as e:
+        logger.error(f"视频分析请求失败: {e}")
         return jsonify({"error": f"请求分析服务失败: {str(e)}"}), 502
 
 @app.route("/api/analysis/result/<job_id>")
@@ -612,6 +831,7 @@ def api_analysis_result(job_id):
         resp = http_requests.get(f"{MOTION_ANALYSIS_URL}/api/analyze/{job_id}", timeout=10)
         return jsonify(resp.json())
     except Exception as e:
+        logger.error(f"获取分析结果失败: {e}")
         return jsonify({"error": str(e)}), 502
 
 @app.route("/api/analysis/<job_id>/<filename>")
@@ -632,6 +852,7 @@ def api_analysis_file(job_id, filename):
             content_type=resp.headers.get("content-type", "application/octet-stream")
         )
     except Exception as e:
+        logger.error(f"获取分析文件失败: {e}")
         return jsonify({"error": str(e)}), 502
 
 
@@ -650,6 +871,7 @@ def api_analysis_llm(job_id):
         if data.get("status") != "completed":
             return jsonify({"error": "分析未完成"}), 400
     except Exception as e:
+        logger.error(f"获取LLM分析失败: {e}")
         return jsonify({"error": str(e)}), 502
     
     result = data.get("result", {})
@@ -708,10 +930,10 @@ def _save_analysis(job_id, user_id, result_data, video_filename=""):
         ))
         conn.commit()
         cur.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"保存分析结果失败: {e}")
     finally:
-        conn.close()
+        put_db(conn)
 
 
 @app.route("/api/analysis/stats")
@@ -770,6 +992,17 @@ def api_analysis_stats():
         recent = cur.fetchall()
         
         cur.close()
+        
+        # 把 datetime 转成带 Z 后缀的 ISO 格式
+        def fix_time(row):
+            if row and row.get('created_at') and hasattr(row['created_at'], 'isoformat'):
+                row['created_at'] = row['created_at'].isoformat() + 'Z'
+            return row
+        
+        best = fix_time(best)
+        worst = fix_time(worst)
+        recent = [fix_time(r) for r in recent]
+        
         return jsonify({
             "total": total,
             "avg_score": avg_score,
@@ -779,9 +1012,10 @@ def api_analysis_stats():
             "recent": recent,
         })
     except Exception as e:
+        logger.error(f"获取分析统计失败: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        put_db(conn)
 
 
 @app.route("/api/analysis/history")
@@ -814,13 +1048,42 @@ def api_analysis_history():
         total = cur.fetchone()["total"]
         
         cur.close()
+        
+        # 把 datetime 转成带 Z 后缀的 ISO 格式（表示 UTC 时间）
+        for row in rows:
+            if row.get('created_at') and hasattr(row['created_at'], 'isoformat'):
+                row['created_at'] = row['created_at'].isoformat() + 'Z'
+        
         return jsonify({"items": rows, "total": total, "limit": limit, "offset": offset})
     except Exception as e:
+        logger.error(f"获取分析历史失败: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        put_db(conn)
+
+
+# ─── 错误处理 ────────────────────────────
+
+@app.errorhandler(404)
+def not_found(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "接口不存在"}), 404
+    return render_template("404.html"), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.error(f"服务器内部错误: {request.path} - {e}")
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "服务器内部错误"}), 500
+    return render_template("500.html"), 500
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "请求过于频繁，请稍后再试"}), 429
+    return "请求过于频繁，请稍后再试", 429
 
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)

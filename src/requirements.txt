@@ -1,5 +1,6 @@
 flask>=3.0
-flask-compress>=1.14
 requests>=2.31
 gunicorn>=21.2
 psycopg2-binary>=2.9.9
+bcrypt>=4.1
+flask-limiter>=3.5

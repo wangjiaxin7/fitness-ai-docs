@@ -20,7 +20,7 @@ app.add_middleware(CORSMiddleware,
 
 DATA_DIR = Path(os.environ.get("ANALYSIS_DATA_DIR", "/data"))
 ANALYZE_SCRIPT = "/app/analyze.py"
-MODEL_PATH = "/tmp/pose_landmarker.task"
+MODEL_PATH = "/data/pose_landmarker.task"
 ALLOWED_EXTS = {".mp4", ".mov", ".avi", ".webm", ".mkv"}
 MAX_SIZE_MB = 200
 API_TOKEN = os.getenv("ANALYSIS_API_TOKEN", "")  # 空=不校验
@@ -269,6 +269,7 @@ async def list_exercises():
             {"name": "dumbbell-fly", "label": "哑铃飞鸟"},
             {"name": "bicep-curl", "label": "二头弯举"},
             {"name": "leg-press", "label": "腿举"},
+            {"name": "romanian-deadlift", "label": "罗马尼亚硬拉"},
         ]
     }
 

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI 健身教练</title>
-<script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.7/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -214,6 +214,37 @@ body{
   .charts-grid{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}
   .msg{max-width:90%}.history-panel.open{width:200px}
 }
+
+/* profile panel */
+.profile-content{width:100%;padding:40px 24px;overflow-y:auto;flex:1;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.profile-content::-webkit-scrollbar{width:0px}
+.profile-content::-webkit-scrollbar-track{background:transparent}
+.profile-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.profile-header{text-align:center;margin-bottom:36px}
+.profile-header h2{font-size:28px;font-weight:800;margin-bottom:12px;background:linear-gradient(135deg,var(--accent),var(--accent2),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-.5px}
+.profile-header p{color:var(--text2);font-size:15px;line-height:1.6}
+.profile-form{display:flex;flex-direction:column;gap:24px}
+.form-section{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;transition:all .3s}
+.form-section:hover{border-color:var(--border-light);background:var(--card-hover)}
+.form-section-title{font-size:14px;font-weight:700;color:var(--accent2);margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.form-section-title::before{content:"";display:block;width:3px;height:16px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:2px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:8px}
+.form-group label{font-size:13px;font-weight:600;color:var(--text2);letter-spacing:.3px}
+.form-group input,.form-group select{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;color:var(--text);font-size:14px;transition:all .25s ease}
+.form-group input:hover,.form-group select:hover{border-color:var(--border-light)}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px rgba(0,102,255,.12);background:var(--bg)}
+.form-group input::placeholder{color:var(--text3);font-style:italic}
+.form-group select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238890a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center}
+.btn-save{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:var(--radius);padding:16px;font-size:16px;font-weight:700;cursor:pointer;transition:all .3s ease;margin-top:12px;position:relative;overflow:hidden}
+.btn-save::before{content:"";position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);transition:left .5s ease}
+.btn-save:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,102,255,.35)}
+.btn-save:hover::before{left:100%}
+.btn-save:active{transform:translateY(0);box-shadow:0 4px 12px rgba(0,102,255,.2)}
+.profile-msg{text-align:center;padding:16px;border-radius:var(--radius);font-size:14px;display:none;margin-top:16px;animation:fadeIn .3s ease}
+.profile-msg.success{display:block;background:linear-gradient(135deg,rgba(0,255,136,.08),rgba(0,255,136,.04));color:var(--success);border:1px solid rgba(0,255,136,.2);box-shadow:0 4px 16px rgba(0,255,136,.1)}
+.profile-msg.error{display:block;background:linear-gradient(135deg,rgba(255,71,87,.08),rgba(255,71,87,.04));color:var(--danger);border:1px solid rgba(255,71,87,.2);box-shadow:0 4px 16px rgba(255,71,87,.1)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -244,6 +275,11 @@ body{
         <div class="nav-item">📹</div>
         <div class="nav-tooltip">动作分析</div>
       </a>
+    </div>
+
+    <div class="nav-item-wrap">
+      <div class="nav-item" id="nav-profile" onclick="switchTab('profile')">👤</div>
+      <div class="nav-tooltip">我的资料</div>
     </div>
 
     {% if is_admin %}
@@ -375,6 +411,77 @@ body{
         </div>
       </div>
     </div>
+
+    <!-- profile panel -->
+    <div class="panel" id="panel-profile">
+      <div class="profile-content">
+        <div class="profile-header">
+          <h2>👤 我的资料</h2>
+          <p>填写个人资料，让AI教练更了解你</p>
+        </div>
+        <form id="profileForm" class="profile-form">
+          <div class="form-section">
+            <div class="form-section-title">基本信息</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>姓名</label>
+                <input type="text" id="profile-name" placeholder="你的名字">
+              </div>
+              <div class="form-group">
+                <label>年龄</label>
+                <input type="number" id="profile-age" placeholder="25" min="10" max="100">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">身体数据</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>身高 (cm)</label>
+                <input type="number" id="profile-height" placeholder="175" min="100" max="250" step="0.1">
+              </div>
+              <div class="form-group">
+                <label>体重 (kg)</label>
+                <input type="number" id="profile-weight" placeholder="70" min="30" max="200" step="0.1">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">训练信息</div>
+            <div class="form-group">
+              <label>训练目标</label>
+              <select id="profile-goal">
+                <option value="">请选择目标</option>
+                <option value="增肌">增肌</option>
+                <option value="减脂">减脂</option>
+                <option value="塑形">塑形</option>
+                <option value="力量">力量提升</option>
+                <option value="健康">保持健康</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>训练经验</label>
+              <select id="profile-experience">
+                <option value="">请选择经验</option>
+                <option value="新手">新手（<6个月）</option>
+                <option value="初级">初级（6个月-1年）</option>
+                <option value="中级">中级（1-3年）</option>
+                <option value="高级">高级（3年以上）</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>可用器材</label>
+              <input type="text" id="profile-equipment" placeholder="例如：哑铃、杠铃、龙门架">
+            </div>
+          </div>
+
+          <button type="submit" class="btn-save">💾 保存资料</button>
+        </form>
+        <div id="profileMsg" class="profile-msg"></div>
+      </div>
+    </div>
   </div>
 </div>
 </div>
@@ -398,6 +505,59 @@ document.querySelectorAll('.nav-item-wrap').forEach(wrap => {
 });
 
 // tab
+// profile functions
+async function loadProfile(){
+  try{
+    const resp=await fetch("/api/profile");
+    const data=await resp.json();
+    if(data.exists && data.profile){
+      const p=data.profile;
+      document.getElementById("profile-name").value=p.name || "";
+      document.getElementById("profile-age").value=p.age || "";
+      document.getElementById("profile-height").value=p.height || "";
+      document.getElementById("profile-weight").value=p.weight || "";
+      document.getElementById("profile-goal").value=p.goal || "";
+      document.getElementById("profile-experience").value=p.experience || "";
+      document.getElementById("profile-equipment").value=p.equipment || "";
+    }
+  }catch(e){console.error("加载资料失败:",e)}
+}
+
+async function saveProfile(e){
+  e.preventDefault();
+  const msg=document.getElementById("profileMsg");
+  const payload={
+    name:document.getElementById("profile-name").value,
+    age:parseInt(document.getElementById("profile-age").value)||0,
+    height:parseFloat(document.getElementById("profile-height").value)||0,
+    weight:parseFloat(document.getElementById("profile-weight").value)||0,
+    goal:document.getElementById("profile-goal").value,
+    experience:document.getElementById("profile-experience").value,
+    equipment:document.getElementById("profile-equipment").value
+  };
+  try{
+    const resp=await fetch("/api/profile",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
+    });
+    const data=await resp.json();
+    if(data.status==="ok"){
+      msg.className="profile-msg success";
+      msg.textContent="✅ 资料保存成功！AI教练现在更了解你了";
+      setTimeout(()=>msg.style.display="none",3000);
+    }else{
+      msg.className="profile-msg error";
+      msg.textContent="❌ 保存失败："+(data.error||"未知错误");
+    }
+  }catch(e){
+    msg.className="profile-msg error";
+    msg.textContent="❌ 网络错误，请重试";
+  }
+}
+
+document.getElementById("profileForm").addEventListener("submit",saveProfile);
+
 function switchTab(name){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -405,6 +565,7 @@ function switchTab(name){
   document.getElementById('nav-'+name).classList.add('active');
   if(name==='log')loadWorkoutHistory();
   if(name==='analysis')loadAnalysis();
+  if(name==='profile')loadProfile();
 }
 
 // history toggle
@@ -542,7 +703,7 @@ async function send(){
     }
     if(historyOpen)loadConversations();
   }catch(e){
-    if(streamEl)streamEl.textContent='请求失败: '+e.message;
+    showToast('请求失败: '+e.message,'error');
   }finally{
     sendBtn.disabled=false;setTyping(false);
   }
@@ -552,16 +713,19 @@ async function send(){
 async function loadWorkoutHistory(){
   const c=document.getElementById('log-table-container');
   try{
-    const r=await fetch('/api/workouts');const d=await r.json();
-    const rows=d.rows||d;
+    const r=await fetch('/api/workouts');
+    if(!r.ok){console.error('workouts API error:',r.status);c.innerHTML='<div class="empty-state">加载失败 ('+r.status+')</div>';return}
+    const d=await r.json();
+    if(d.error){console.error('workouts data error:',d.error);c.innerHTML='<div class="empty-state">'+escHtml(d.error)+'</div>';return}
+    const rows=d.workouts||d.rows||d;
     if(!Array.isArray(rows)||!rows.length){c.innerHTML='<div class="empty-state"><span class="icon">📋</span>还没有训练记录</div>';return}
     let h='<div class="log-table-wrap"><table class="log-table"><thead><tr><th>日期</th><th>动作</th><th>组数</th><th>次数</th><th>重量</th><th>RPE</th><th>备注</th></tr></thead><tbody>';
     for(const r of rows){
       const d=r.workout_date?r.workout_date.slice(0,10):'-';
-      h+=`<tr><td>${d}</td><td class="exercise-name">${r.exercise||'-'}</td><td>${r.sets||0}</td><td>${r.reps||0}</td><td>${r.weight||0} kg</td><td>${r.rpe||'-'}</td><td style="color:var(--text3);font-size:11px">${(r.notes||'').slice(0,20)}</td></tr>`;
+      h+=`<tr><td>${d}</td><td class="exercise-name">${escHtml(r.exercise||'-')}</td><td>${r.sets||0}</td><td>${r.reps||0}</td><td>${r.weight||0} kg</td><td>${r.rpe||'-'}</td><td style="color:var(--text3);font-size:11px">${escHtml((r.notes||'').slice(0,20))}</td></tr>`;
     }
     h+='</tbody></table></div>';c.innerHTML=h;
-  }catch(e){c.innerHTML='<div class="empty-state">加载失败</div>'}
+  }catch(e){console.error('loadWorkoutHistory error:',e);c.innerHTML='<div class="empty-state">加载失败: '+escHtml(e.message)+'</div>'}
 }
 
 async function saveWorkout(){
@@ -582,8 +746,11 @@ async function saveWorkout(){
 // analysis
 async function loadAnalysis(){
   try{
-    const r=await fetch('/api/workouts?days=90');const d=await r.json();
-    const rows=d.rows||d;
+    const r=await fetch('/api/workouts?days=90');
+    if(!r.ok){console.error('analysis API error:',r.status);return}
+    const d=await r.json();
+    if(d.error){console.error('analysis data error:',d.error);return}
+    const rows=d.workouts||d.rows||d;
     if(!Array.isArray(rows)||!rows.length)return;
     const total=rows.length,exercises=[...new Set(rows.map(r=>r.exercise))].length;
     const dates=[...new Set(rows.filter(r=>r.workout_date).map(r=>r.workout_date.slice(0,10)))].sort().reverse();
@@ -601,13 +768,14 @@ async function loadAnalysis(){
     const rr={'1-5':0,'6-10':0,'11-15':0,'16-20':0,'20+':0};
     rows.forEach(r=>{const n=r.reps||0;if(n<=5)rr['1-5']++;else if(n<=10)rr['6-10']++;else if(n<=15)rr['11-15']++;else if(n<=20)rr['16-20']++;else rr['20+']++});
     const th={color:'#8890a0',grid:{color:'rgba(255,255,255,.04)',drawBorder:false},ticks:{color:'#8890a0',font:{size:10,family:"'PingFang SC',sans-serif"}}};
+    if(typeof Chart==='undefined'){console.error('Chart.js not loaded');return}
     if(charts.weight)charts.weight.destroy();
     if(charts.volume)charts.volume.destroy();
     if(charts.reps)charts.reps.destroy();
     charts.weight=new Chart(document.getElementById('weightChart'),{type:'line',data:{labels:lb,datasets:[{label:'最大重量 (kg)',data:wd,borderColor:'#0066ff',backgroundColor:'rgba(0,102,255,.1)',borderWidth:2,pointRadius:3,pointBackgroundColor:'#0066ff',fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:th,y:{...th,beginAtZero:true}}}});
     charts.volume=new Chart(document.getElementById('volumeChart'),{type:'bar',data:{labels:lb,datasets:[{label:'训练容量',data:vd,backgroundColor:'rgba(0,212,255,.3)',borderColor:'#00d4ff',borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:th,y:{...th,beginAtZero:true}}}});
     charts.reps=new Chart(document.getElementById('repsChart'),{type:'doughnut',data:{labels:Object.keys(rr),datasets:[{data:Object.values(rr),backgroundColor:['rgba(0,102,255,.6)','rgba(0,212,255,.6)','rgba(0,255,136,.6)','rgba(124,58,237,.6)','rgba(255,71,87,.6)'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8890a0',font:{size:11,family:"'PingFang SC',sans-serif"},padding:12,usePointStyle:true}}}}});
-  }catch(e){}
+  }catch(e){console.error('loadAnalysis error:',e)}
 }
 
 function escHtml(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}

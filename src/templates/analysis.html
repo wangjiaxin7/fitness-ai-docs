@@ -117,7 +117,7 @@ h1 { font-size: 22px; margin-bottom: 20px; color: #f0f4f8; }
 
 .media-section {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 16px;
   margin-top: 16px;
 }
@@ -127,7 +127,7 @@ h1 { font-size: 22px; margin-bottom: 20px; color: #f0f4f8; }
   border-radius: 10px;
   overflow: hidden;
 }
-.media-box video, .media-box img {
+.media-box img {
   width: 100%;
   display: block;
 }
@@ -219,31 +219,6 @@ h1 { font-size: 22px; margin-bottom: 20px; color: #f0f4f8; }
   100% { content: '...'; }
 }
 .llm-error { color: #ff6b6b; }
-
-/* Log viewer */
-.log-toggle {
-  margin-top: 12px;
-  font-size: 12px;
-  color: #606880;
-  cursor: pointer;
-  user-select: none;
-}
-.log-toggle:hover { color: #8890b0; }
-.log-content {
-  display: none;
-  margin-top: 8px;
-  padding: 12px;
-  background: #0a0c14;
-  border: 1px solid #1e2340;
-  border-radius: 8px;
-  font-family: monospace;
-  font-size: 11px;
-  color: #606880;
-  max-height: 200px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-}
-.log-content.open { display: block; }
 
 /* Stats Dashboard */
 .stats-section {
@@ -351,7 +326,6 @@ h1 { font-size: 22px; margin-bottom: 20px; color: #f0f4f8; }
 /* Responsive */
 @media (max-width: 640px) {
   .result-grid { grid-template-columns: 1fr; }
-  .media-section { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -377,6 +351,7 @@ h1 { font-size: 22px; margin-bottom: 20px; color: #f0f4f8; }
   <div class="exercise-bar">
     <button class="exercise-btn auto active" data-exercise="">自动识别</button>
   </div>
+  <div id="viewTip" style="display:none;color:#4a7cff;font-size:12px;margin-bottom:12px;"></div>
 
   <!-- Upload -->
   <div class="upload-zone" id="uploadZone">
@@ -425,11 +400,28 @@ const API_BASE = '/api/analysis';
 let selectedExercise = '';
 let currentJobId = null;
 
+// 推荐拍摄角度
+const viewTips = {
+  'squat': '侧面',
+  'pull-up': '背面',
+  'lat-pulldown': '正面',
+  'back-pull': '背面',
+  'leg-press': '侧面',
+  'bench-press': '正面',
+  'incline-db-press': '正面',
+  'chest-press': '正面',
+  'shoulder-press': '正面',
+  'dumbbell-fly': '正面',
+  'bicep-curl': '侧面',
+  'romanian-deadlift': '侧面',
+};
+
 // Load exercises
 fetch(`${API_BASE}/exercises`)
   .then(r => r.json())
   .then(data => {
     const bar = document.querySelector('.exercise-bar');
+    const tipEl = document.getElementById('viewTip');
     (data.exercises || []).forEach(ex => {
       const btn = document.createElement('button');
       btn.className = 'exercise-btn';
@@ -439,6 +431,14 @@ fetch(`${API_BASE}/exercises`)
         document.querySelectorAll('.exercise-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         selectedExercise = ex.name;
+        // 显示拍摄角度提示
+        const tip = viewTips[ex.name];
+        if (tip && tipEl) {
+          tipEl.textContent = `💡 建议${tip}拍摄`;
+          tipEl.style.display = 'block';
+        } else if (tipEl) {
+          tipEl.style.display = 'none';
+        }
       };
       bar.appendChild(btn);
     });
@@ -580,7 +580,7 @@ function showResult(jobId, data) {
   const r = data.result || {};
   const details = r._details || r.details || {};
   const resultData = r.result || r;
-  const viewType = r._view || '';
+  const viewType = r.view || r._view || '';
   const exerciseLabel = resultData.label || '分析结果';
   const totalScore = resultData.total || 0;
   
@@ -639,9 +639,7 @@ function showResult(jobId, data) {
   document.getElementById('resultSection').innerHTML = `
     <h2 style="font-size:18px;margin-bottom:4px;">${exerciseLabel}</h2>
     <p style="color:#606880;font-size:12px;margin-bottom:16px;">
-      拍摄视角: ${viewLabel} | 
-      <a href="${API_BASE}/${jobId}/result.json" target="_blank" style="color:#4a7cff;">JSON</a> |
-      <a href="${API_BASE}/${jobId}/log" target="_blank" style="color:#4a7cff;">日志</a>
+      拍摄视角: ${viewLabel}
     </p>
     ${viewWarning ? `<div style="background:#2a2000;border:1px solid #5a4a00;border-radius:8px;padding:10px 14px;margin-bottom:16px;color:#ffd54f;font-size:13px;">⚠️ ${viewWarning}</div>` : ''}
     
@@ -654,28 +652,15 @@ function showResult(jobId, data) {
     </div>
     
     <div class="media-section">
-      <div class="media-box">
-        <div class="title">标注视频 <span class="badge">MP4</span></div>
-        <video controls src="${API_BASE}/${jobId}/video.mp4" onerror="this.parentElement.innerHTML='<div class=\\'title\\'>标注视频</div><div style=\\'padding:40px;text-align:center;color:#606880;\\'>视频不可用</div>'"></video>
-      </div>
-      <div class="media-box">
+      <div class="media-box" style="width:100%;">
         <div class="title">角度图表 <span class="badge">PNG</span></div>
-        <img src="${API_BASE}/${jobId}/chart.png" onerror="this.parentElement.innerHTML='<div class=\\'title\\'>角度图表</div><div style=\\'padding:40px;text-align:center;color:#606880;\\'>图表不可用</div>'">
+        <img src="${API_BASE}/${jobId}/chart.png" onerror="this.parentElement.innerHTML='<div class=&quot;title&quot;>角度图表</div><div style=&quot;padding:40px;text-align:center;color:#606880;&quot;>图表不可用</div>'">
       </div>
     </div>
-    
-    <div class="log-toggle" onclick="toggleLog(this)">📋 查看分析日志</div>
-    <div class="log-content" id="logContent"></div>
   `;
   
   document.getElementById('resultSection').classList.add('active');
   document.getElementById('progressSection').classList.remove('active');
-  
-  // Load log
-  fetch(`${API_BASE}/${jobId}/log`)
-    .then(r => r.text())
-    .then(log => document.getElementById('logContent').textContent = log)
-    .catch(() => {});
   
   // AI 教练分析
   const llmBox = document.createElement('div');
@@ -705,12 +690,6 @@ function renderMarkdown(text) {
     .replace(/### (.+)/g, '<h3>$1</h3>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n/g, '<br>');
-}
-
-function toggleLog(el) {
-  const content = el.nextElementSibling;
-  content.classList.toggle('open');
-  el.textContent = content.classList.contains('open') ? '📋 收起日志' : '📋 查看分析日志';
 }
 
 // ════════════════════════════════════════════

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>页面不存在 - AI 健身教练</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080a12;--border:rgba(255,255,255,.1);--accent:#0066ff;--accent2:#00d4ff;
+  --text:#f0f4f8;--text2:#b0b8c8;--text3:#8890a0;
+  --font:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  display:flex;justify-content:center;align-items:center;min-height:100vh;
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(0,102,255,.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(0,212,255,.04) 0%, transparent 40%);
+}
+.error-card{
+  background:rgba(255,255,255,.04);backdrop-filter:blur(20px);
+  border:1px solid var(--border);border-radius:20px;padding:48px 40px;
+  text-align:center;max-width:420px;
+}
+.error-code{
+  font-size:72px;font-weight:800;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;line-height:1;margin-bottom:16px;
+}
+h1{font-size:20px;margin-bottom:12px;font-weight:600}
+p{color:var(--text2);font-size:14px;line-height:1.6;margin-bottom:24px}
+.btn{
+  display:inline-block;padding:12px 32px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;border-radius:10px;color:#000;font-size:14px;font-weight:700;
+  cursor:pointer;text-decoration:none;transition:all .2s;
+}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,102,255,.25)}
+</style>
+</head>
+<body>
+<div class="error-card">
+  <div class="error-code">404</div>
+  <h1>页面不存在</h1>
+  <p>你访问的页面可能已被删除、重命名，或者从未存在过。</p>
+  <a href="/" class="btn">返回首页</a>
+</div>
+</body>
+</html>

@@ -17,7 +17,7 @@ if _env_path.exists():
 EMBEDDING_API_URL = "https://api.siliconflow.cn/v1/embeddings"
 EMBEDDING_MODEL = "BAAI/bge-m3"
 KNOWLEDGE_DIR = os.environ.get("KNOWLEDGE_DIR", "/app/knowledge")
-INDEX_PATH = os.environ.get("KNEDX_PATH", "/app/knowledge/index.json")
+INDEX_PATH = os.environ.get("INDEX_PATH", "/app/knowledge/index.json")
 API_KEY = os.getenv("SILICONFLOW_API_KEY", "")
 CHUNK_SIZE = 500       # 每个 chunk 最大字符数
 CHUNK_OVERLAP = 50     # chunk 重叠字符数
@@ -146,8 +146,8 @@ def build_index():
     print(f"索引已保存: {INDEX_PATH} ({len(all_chunks)} chunks)")
 
 
-def search(query: str, top_k: int = TOP_K) -> list[str]:
-    """向量检索：返回最相关的 chunk 文本列表"""
+def search(query: str, top_k: int = TOP_K) -> list[dict]:
+    """向量检索：返回最相关的 chunk 列表，每个包含 text/title/source"""
     if not API_KEY:
         return []
 
@@ -194,7 +194,11 @@ def search(query: str, top_k: int = TOP_K) -> list[str]:
         if chunk["title"] in seen_titles:
             continue
         seen_titles.add(chunk["title"])
-        results.append(chunk["text"])
+        results.append({
+            "text": chunk["text"],
+            "title": chunk["title"],
+            "source": chunk["source"],
+        })
         if len(results) >= top_k:
             break
 
@@ -211,7 +215,7 @@ if __name__ == "__main__":
         print(f"\n查询: {query}")
         print(f"返回 {len(results)} 条结果:")
         for i, r in enumerate(results):
-            print(f"\n--- [{i+1}] ---")
-            print(r[:200] + "...")
+            print(f"\n--- [{i+1}] {r['title']} ({r['source']}) ---")
+            print(r['text'][:200] + "...")
     else:
         print("用法: python rag.py build | python rag.py test [query]")
